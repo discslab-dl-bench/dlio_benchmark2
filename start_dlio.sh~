@@ -12,6 +12,7 @@ mkdir -p $OUTPUT_DIR
 
 num_gpus=${1:-8}
 container_name=${2:-train_dlio}
+generate_data=${3:-n} 			# Default: don't generate data
 
 # Remove existing container if a previous run was interrupted
 if [ "$(docker ps -a | grep $container_name)" ]
