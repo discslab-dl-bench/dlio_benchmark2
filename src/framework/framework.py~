@@ -81,7 +81,7 @@ class Framework(ABC):
         string_val = "x" * (1024)
         f.write(string_val)
         f.close()
-        logging.info("{} Ending checkpoint: Step {}".format(utcnow(),step_number))
+        logging.info("{} Starting checkpoint: Step {}".format(utcnow(),step_number))
         pass
 
     def model(epoch, epoch_number, step, computation_time):

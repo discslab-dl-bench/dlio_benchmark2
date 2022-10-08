@@ -2,8 +2,8 @@
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-DATA_DIR=${SCRIPT_DIR}/data
 OUTPUT_DIR=${SCRIPT_DIR}/output
+DATA_DIR=/raid/data/bert_dlio/
 
 # Default names of directories for generating data and output
 # Aligned with dlio argument_parser.py

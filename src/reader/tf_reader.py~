@@ -64,7 +64,7 @@ class TFReader(FormatReader):
         super().read(epoch_number, do_eval)
 
         if not do_eval:
-            filenames = tf.data.Dataset.list_files(self._local_train_file_list)
+            filenames = tf.data.Dataset.list_filenames(self._local_train_file_list)
             #dataset_train = tf.data.TFRecordDataset(filenames=self._local_train_file_list,
                                             #buffer_size=self.transfer_size,
                                             #num_parallel_reads=self.read_threads)

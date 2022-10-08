@@ -2,8 +2,8 @@
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-DATA_DIR=${SCRIPT_DIR}/data
 OUTPUT_DIR=${SCRIPT_DIR}/output
+DATA_DIR=/raid/data/bert_dlio/
 
 # Default names of directories for generating data and output
 # Aligned with dlio argument_parser.py and run_dlio.sh
@@ -22,4 +22,4 @@ fi
 
 # Must use ipc=host to launch the container else pytorch dataloader will crash
 # https://github.com/ultralytics/yolov3/issues/283#issuecomment-552776535
-docker run -it --rm --name=$container_name --ipc=host --gpus $num_gpus -v $DATA_DIR:/workspace/dlio/data -v $OUTPUT_DIR:/workspace/dlio/output dlio:latest /bin/bash
+docker run -it --rm --name=$container_name --ipc=host --gpus $num_gpus -v $DATA_DIR:/workspace/dlio/data -v $OUTPUT_DIR:/workspace/dlio/output bert_dlio:latest /bin/bash
