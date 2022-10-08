@@ -131,9 +131,9 @@ class DLIOBenchmark(object):
             if self.computation_time > 0:
                 self.framework.compute(epoch_number, step, self.computation_time)
                 if self.arg_parser.args.checkpoint and step % self.arg_parser.args.steps_checkpoint == 0:
-                    self.framework.checkpoint(step)
                     logging.info("{} Ending block: {}".format(utcnow(), block_num))
                     block_num += 1
+                    self.framework.checkpoint(step)
                 step += 1
             if step > total:
                 return step - 1
