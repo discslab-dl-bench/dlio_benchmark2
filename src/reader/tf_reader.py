@@ -64,15 +64,15 @@ class TFReader(FormatReader):
         super().read(epoch_number, do_eval)
 
         if not do_eval:
-            filenames = tf.data.Dataset.list_files(self._local_train_file_list)
-            #dataset_train = tf.data.TFRecordDataset(filenames=self._local_train_file_list,
-                                            #buffer_size=self.transfer_size,
-                                            #num_parallel_reads=self.read_threads)
-            dataset_train = filenames.apply(
-                    tf.data.experimental.parallel_interleave(
-                        tf.data.TFRecordDataset,
-                        sloppy=True,
-                        cycle_length=self.read_threads))
+            #filenames = tf.data.Dataset.list_files(self._local_train_file_list)
+            dataset_train = tf.data.TFRecordDataset(filenames=self._local_train_file_list,
+                                            buffer_size=self.transfer_size,
+                                            num_parallel_reads=self.read_threads)
+            #dataset_train = filenames.apply(
+            #        tf.data.experimental.parallel_interleave(
+            #            tf.data.TFRecordDataset,
+            #            sloppy=True,
+            #            cycle_length=self.read_threads))
             dataset_train = dataset_train.map(self._tf_parse_function, num_parallel_calls=self.computation_threads)
 
             if self.memory_shuffle != Shuffle.OFF:

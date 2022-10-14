@@ -125,15 +125,21 @@ class DLIOBenchmark(object):
         step = 1
         block_num = 1
         total = math.ceil(self.num_samples * self.num_files_train / self.batch_size / self.comm_size)
+        if self.arg_parser.args.my_rank == 0:
+            self.framework.checkpoint(0)
+        self.framework.barrier()
         for batch in self.framework.get_reader().next():
-            if step % self.arg_parser.args.steps_checkpoint == 1 and  self.arg_parser.args.my_rank == 0:
+            if step % self.arg_parser.args.steps_checkpoint == 1 and self.arg_parser.args.my_rank == 0:
                 logging.info("{} Starting block: {}".format(utcnow(), block_num))
             if self.computation_time > 0:
                 self.framework.compute(epoch_number, step, self.computation_time)
                 if self.arg_parser.args.checkpoint and step % self.arg_parser.args.steps_checkpoint == 0:
-                    self.framework.checkpoint(step)
-                    logging.info("{} Ending block: {}".format(utcnow(), block_num))
-                    block_num += 1
+                    if self.arg_parser.args.my_rank == 0:
+                        logging.info("{} Ending block: {}".format(utcnow(), block_num))
+                        block_num += 1
+                        self.framework.checkpoint(step)
+                    # Want everyone to wait for the first process to finish checkpointing before resuming
+                    self.framework.barrier()
                 step += 1
             if step > total:
                 return step - 1
