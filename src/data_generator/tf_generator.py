@@ -1,14 +1,17 @@
 """
- Copyright (C) 2020  Argonne, Hariharan Devarajan <hdevarajan@anl.gov>
- This file is part of DLProfile
- DLIO is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as
- published by the Free Software Foundation, either version 3 of the published by the Free Software Foundation, either
- version 3 of the License, or (at your option) any later version.
- This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
- warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
- details.
- You should have received a copy of the GNU General Public License along with this program.
- If not, see <http://www.gnu.org/licenses/>.
+   Copyright 2021 UChicago Argonne, LLC
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
 """
 
 from src.data_generator.data_generator import DataGenerator
@@ -30,6 +33,7 @@ class TFRecordGenerator(DataGenerator):
         import tensorflow as tf
         """
         Generator for creating data in TFRecord format of 3d dataset.
+        TODO: Extend this to create accurate records for BERT, which does not use image/label pairs.
         """
         super().generate()
         # This create a 2d image representing a single record
@@ -41,16 +45,14 @@ class TFRecordGenerator(DataGenerator):
         for i in range(0, self.total_files_to_generate):
             if i % self.comm_size == self.my_rank:
                 progress(i+1, self.total_files_to_generate, "Generating TFRecord Data")
-                out_path_spec = "{}_{}_of_{}.tfrecords".format(self._file_prefix, i, self.total_files_to_generate)
-                logging.info("{} Generating TFRecord {}".format(utcnow(), out_path_spec))
+                out_path_spec = f"{self._file_prefix}_{i}_of_{self.total_files_to_generate}.tfrecords"
+                logging.info(f"{utcnow()} Generating TFRecord {out_path_spec}")
                 # Open a TFRecordWriter for the output-file.
                 if count == 0:
                     prev_out_spec = out_path_spec
                     with tf.io.TFRecordWriter(out_path_spec) as writer:
                         for i in range(0, self.num_samples):
                             img_bytes = record.tostring()
-                            # TODO: We should adapt this to create realistic datasets for each workload
-                            # since only image segmentation uses images
                             data = {
                                 'image': tf.train.Feature(bytes_list=tf.train.BytesList(value=[img_bytes])),
                                 'label': tf.train.Feature(int64_list=tf.train.Int64List(value=[record_label]))

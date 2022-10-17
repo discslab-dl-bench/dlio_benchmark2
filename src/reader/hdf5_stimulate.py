@@ -1,14 +1,17 @@
 """
- Copyright (C) 2020  Argonne, Hariharan Devarajan <hdevarajan@anl.gov>
- This file is part of DLProfile
- DLIO is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as
- published by the Free Software Foundation, either version 3 of the published by the Free Software Foundation, either
- version 3 of the License, or (at your option) any later version.
- This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
- warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
- details.
- You should have received a copy of the GNU General Public License along with this program.
- If not, see <http://www.gnu.org/licenses/>.
+   Copyright 2021 UChicago Argonne, LLC
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
 """
 
 from src.common.enumerations import Shuffle, FileAccess
@@ -59,7 +62,7 @@ class HDF5StimulateReader(FormatReader):
         if FileAccess.MULTI == self.file_access:
             # for multiple file access the whole file would read by each process.
             part_start, part_end = 0, int(math.ceil(self.num_samples/self.batch_size))
-            for file in self._local_train_file_list:
+            for file in self._local_file_list:
                 local_file_list.append((file,str(part_start),str(part_end)))
         else:
             # for shared file access a part of file would be read by each process.
@@ -73,7 +76,7 @@ class HDF5StimulateReader(FormatReader):
             else:
                 parallel_threads = 1
                 part_size = total_samples_per_rank;
-            for file in self._local_train_file_list:
+            for file in self._local_file_list:
                 for i in range(parallel_threads):
                     local_file_list.append((file,str(i*part_size),str(part_size)))
         options = tf.data.Options()

@@ -24,6 +24,10 @@ class Framework(ABC):
     def init_reader(self, format_type):
         pass
 
+    @abstractmethod 
+    def get_type(self):
+        pass
+    
     @abstractmethod
     def barrier(self):
         pass
@@ -52,19 +56,19 @@ class Framework(ABC):
         logging.info("{} Starting checkpoint: Step {}".format(utcnow(),step_number))
         """
         Performs Checkpointing for a specific step number. It writes different file of different sizes.
+        TODO: Parametrize the model size, which is vastly different e.g. between BERT, UNET3D and DLRM.
+        TODO: Implement framework specific checkpointing - probably they write different number of files
         """
-        if not os.path.exists(self.arg_parser.args.output_folder):
-            os.makedirs(self.arg_parser.args.output_folder)
-        model_file = os.path.join(self.arg_parser.args.output_folder,
-                                  "model_{}_{}.bin".format(step_number, self.arg_parser.args.my_rank))
-        bak_file1 = os.path.join(self.arg_parser.args.output_folder,
-                                 "file1_{}_{}.bin".format(step_number, self.arg_parser.args.my_rank))
-        bak_file2 = os.path.join(self.arg_parser.args.output_folder,
-                                 "file2_{}_{}.bin".format(step_number, self.arg_parser.args.my_rank))
-        meta_file = os.path.join(self.arg_parser.args.output_folder,
-                                 "meta_{}_{}.bin".format(step_number, self.arg_parser.args.my_rank))
-        index_file = os.path.join(self.arg_parser.args.output_folder,
-                                 "index_{}_{}.bin".format(step_number, self.arg_parser.args.my_rank))
+        output_folder = self.arg_parser.args.output_folder
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+
+        model_file = os.path.join(output_folder, f"model_{step_number}_{self.arg_parser.args.my_rank}.bin")
+        bak_file1 = os.path.join(output_folder, f"file1_{step_number}_{self.arg_parser.args.my_rank}.bin")
+        bak_file2 = os.path.join(output_folder, f"file2_{step_number}_{self.arg_parser.args.my_rank}.bin")
+        meta_file = os.path.join(output_folder, f"meta_{step_number}_{self.arg_parser.args.my_rank}.bin")
+        index_file = os.path.join(output_folder, f"index_(step_number)_{self.arg_parser.args.my_rank}.bin")
+
         f = open(model_file, "w")
         string_val = "x" * self.arg_parser.args.model_size 
         f.write(string_val)
