@@ -1,0 +1,25 @@
+Core metric:
+    samples per second
+
+
+Ancillary metrics:
+    Read Bandwidth (eg: MB/s)   - from iostat
+    Write Bandwidth (eg: MB/s)  - from iostat
+    Read IOPS                   - iostat
+    Write IOPS                  - iostat
+    Reads I/O queue length (nice to have for future versions)   ?
+    Writes I/O queue length (nice to have for future versions)  ?
+    Latency from sample request to sample return: Histogram, or median + stdev  -- is equivalent to the time for batch processing
+    Accelerator idle time (total time - time spent sleeping)                    -- equivalent to batch loading time
+    Total training time (seconds)  [perhaps not a good metric for us?]          
+    Loading time for an epoch of data                                           -- all the time in an epoch not spent sleeping (simulating computation) == sum of all time spent loading data (there might also be checkpointing)
+    Percentiles of I/O completion times for reads and writes (maybe use for future versions)    -- unsure we can get this at the application level, though we can look at distrib of iostats
+    CPU use                     - from iostat
+
+
+
+We can get the samples/sec from loading time for batches at the application level.
+This is pretty much equivalent to the accelerator idle time though as the app waits for the batch to be returned before simulating the computation.
+--> I wonder how prefetching will affect this, and if in a real app using a full tf.data.pipeline with an estimator it would be the same?
+
+I think the 

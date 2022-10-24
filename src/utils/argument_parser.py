@@ -137,6 +137,7 @@ class ArgumentParser(object):
                                  help="Epoch number after which to start evaluating")
         self.parser.add_argument("-eee", "--eval-every-epoch", default=0, type=int,
                                  help="Evaluation frequency: evaluate every x epochs")
+
         self.args = self.parser.parse_args()
         self._validate()
 

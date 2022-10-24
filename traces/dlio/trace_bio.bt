@@ -1,0 +1,84 @@
+#!/usr/bin/env bpftrace
+
+#include <linux/blkdev.h>
+
+/*
+ * Adaptation of biosnoop.bt by Brendan Gregg
+ * For details about this trace and limitations see: 
+ * https://github.com/brendangregg/perf-tools/blob/master/examples/iosnoop_example.txt
+ * https://github.com/iovisor/bcc/issues/826
+ * https://github.com/iovisor/bcc/blob/master/tools/biosnoop.py 
+ * Using the tracepoints, it's mentioned that the issuing command and the PID are not 100% reliable.
+ * It's unclear if this holds using the kprobes like we do here.
+ * I've followed using 3 probes like in the bcc version of biosnoop vs only 2 like the bpftrace version.
+ * The first probe serves just ot get the PID and command name.
+ *
+ * Delta between blk_account_io_start and blk_account_io_done gives the time from bio request queuing to completion
+ * while that between blk_mq_start_request and and blk_account_io_done gives the time from bio issuing to device to completion, should always be shorter
+ */
+
+BEGIN
+{
+	printf("%-17s %-8s %-14s ", "TIMESTAMP", "PID", "COMM");
+	printf("%-4s %-1s %-12s %s %s\n", "DISK", "T", "BYTES", "QLAT(ns)", "LAT(ns)");
+}
+
+/*
+ * Looks like this function is called eventually after a request is sent to a block device
+ * through mlk_mq_submit_bio https://elixir.bootlin.com/linux/latest/source/block/blk-mq.c#L2800
+ * E.g. blk_mq_bio_to_request() calls it.
+ */
+kprobe:blk_account_io_start
+/ comm == "python3" || comm == "mpirun" || comm == "horovodrun" /
+{
+	@qstart[arg0] = nsecs;
+	@iopid[arg0] = pid;
+	@iocomm[arg0] = comm;
+	@disk[arg0] = ((struct request *)arg0)->rq_disk->disk_name;
+	@rw[arg0] = (((struct request *)arg0)->cmd_flags & 255) == 1 ? "W" : "R";
+	@len[arg0] =  ((struct request *)arg0)->__data_len;
+}
+
+/* 
+ * https://github.com/iovisor/bcc/issues/826
+ * Probe executes when the request will actually be processed 
+ * https://elixir.bootlin.com/linux/latest/source/block/blk-mq.c#L1130
+ */
+kprobe:blk_mq_start_request
+/ @qstart[arg0] != 0 /
+{
+	@start[arg0] = nsecs
+}
+
+kprobe:blk_account_io_done
+/ @qstart[arg0] != 0 && @start[arg0] != 0 /
+{
+	$now = nsecs;
+	
+	printf("%-17lu %-8d %-14s %-4s ",	
+		$now,    
+		@iopid[arg0], 
+		@iocomm[arg0], 
+		@disk[arg0] 
+	);
+
+	printf("%-1s %-12lu %lu %lu\n", @rw[arg0], @len[arg0], $now - @qstart[arg0], $now - @start[arg0]);
+
+	delete(@start[arg0]);
+	delete(@qstart[arg0]);
+	delete(@iopid[arg0]);
+	delete(@iocomm[arg0]);
+	delete(@disk[arg0]);
+	delete(@rw[arg0]);
+	delete(@len[arg0]);
+}
+
+END
+{
+	clear(@start);
+	clear(@iopid);
+	clear(@iocomm);
+	clear(@disk);
+	clear(@rw);
+	clear(@len);
+}

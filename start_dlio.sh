@@ -68,9 +68,12 @@ main() {
 
 	# Must use ipc=host to launch the container else pytorch dataloader will crash
 	# https://github.com/ultralytics/yolov3/issues/283#issuecomment-552776535
+	
+		# -v /sys/kernel/debug:/sys/kernel/debug -v /sys/fs/cgroup:/sys/fs/cgroup -v /sys/fs/bpf:/sys/fs/bpf --privileged \	# To use BPFTrace
 	docker run -it --rm --ipc=host $CONTAINER_NAME_ARG \
 		-v $DATA_DIR:/workspace/dlio/data \
-		-v $OUTPUT_DIR:/workspace/dlio/output $IMAGE_NAME /bin/bash $SCRIPT $EXTRA_ARGS
+		-v $OUTPUT_DIR:/workspace/dlio/output \
+		$IMAGE_NAME /bin/bash $SCRIPT $EXTRA_ARGS
 }
 
 main $@

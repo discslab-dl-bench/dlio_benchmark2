@@ -76,5 +76,6 @@ class NPZReader(FormatReader):
                     count += 1
                     images = element['dataset'][:][:][num_set * self.batch_size:(num_set + 1) * self.batch_size - 1]
                 yield images
+
     def finalize(self):
         pass

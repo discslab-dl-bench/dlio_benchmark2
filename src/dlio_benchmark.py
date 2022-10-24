@@ -14,6 +14,7 @@
    limitations under the License.
 """
 from time import time
+from postprocessing.dlio_postprocesser import DLIOPostProcessor
 
 from src.common.enumerations import Profiler
 from src.data_generator.generator_factory import GeneratorFactory
@@ -26,6 +27,7 @@ import math
 import os
 import shutil
 import logging
+import pandas as pd
 
 # Remove (some) TF and CUDA logging
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -50,12 +52,15 @@ class DLIOBenchmark(object):
         """
         self.arg_parser = ArgumentParser.get_instance()
         self.output_folder = self.arg_parser.args.output_folder
+        self.logfile = os.path.join(self.output_folder, self.arg_parser.args.log_file)
+        self.iostat_file = os.path.join(self.output_folder, 'iostat.out')
+
         # Configure the logging library
         log_level = logging.DEBUG if self.arg_parser.args.debug else logging.INFO
         logging.basicConfig(
             level=log_level,
             handlers=[
-                logging.FileHandler(os.path.join(self.output_folder, self.arg_parser.args.log_file), mode = "a", encoding='utf-8'),
+                logging.FileHandler(self.logfile, mode = "a", encoding='utf-8'),
                 logging.StreamHandler()
             ],
             format='%(message)s [%(pathname)s:%(lineno)d]'  # logging's max timestamp resolution is msecs, we will pass in usecs in the message
@@ -66,14 +71,14 @@ class DLIOBenchmark(object):
         self.my_rank = self.arg_parser.args.my_rank = self.framework.rank()
         self.comm_size = self.arg_parser.args.comm_size = self.framework.size()
         self.framework.init_reader(self.arg_parser.args.format)
-        self.darshan = None
+        self.iostat = None
         self.data_generator = None
         self.num_files_train = self.arg_parser.args.num_files_train
         self.num_samples = self.arg_parser.args.num_samples
         self.batch_size = self.arg_parser.args.batch_size
         self.computation_time = self.arg_parser.args.computation_time
         if self.arg_parser.args.profiling:
-            self.darshan = ProfilerFactory().get_profiler(Profiler.DARSHAN)
+            self.iostat = ProfilerFactory().get_profiler(Profiler.IOSTAT, self.iostat_file)
         if self.arg_parser.args.generate_data:
             self.data_generator = GeneratorFactory.get_generator(self.arg_parser.args.format)
         # Evaluation support
@@ -84,6 +89,15 @@ class DLIOBenchmark(object):
         self.eval_after_epoch = self.arg_parser.args.eval_after_epoch
         self.eval_every_epoch = self.arg_parser.args.eval_every_epoch
         
+        # Hold various lists/dicts for statistics
+        self.time_to_load_train_batch = []
+        self.time_to_process_train_batch = []
+
+        self.time_to_load_eval_batch = []
+        self.time_to_process_eval_batch = []
+
+        self.epoch_completion_times = []
+        self.eval_completion_times = []
 
     def initialize(self):
         """
@@ -99,8 +113,8 @@ class DLIOBenchmark(object):
             self.data_generator.generate()
             logging.info(f"{utcnow()} Generation done")
         if self.arg_parser.args.profiling:
-            self.darshan.start()
-            self.framework.start_framework_profiler()
+            self.iostat.start()
+            # self.framework.start_framework_profiler()
             self.framework.barrier()
             if self.arg_parser.args.my_rank == 0:
                 logging.info(f"{utcnow()} Profiling Started")
@@ -112,12 +126,20 @@ class DLIOBenchmark(object):
         """
         step = 1
         total = math.ceil(self.num_samples * self.num_files_eval / self.batch_size_eval / self.comm_size)
+        t1 = time() 
         for batch in self.framework.get_reader().next():
+            # logging.info(f"{utcnow()} Rank {self.my_rank} loaded {self.batch_size_eval} samples in {time() - t1} seconds")
+            self.time_to_load_eval_batch.append([utcnow(), epoch_number, time() - t1])
             if self.eval_time > 0:
                 self.framework.compute(epoch_number, step, self.eval_time)
             step += 1
             if step > total:
                 return step - 1
+            self.framework.barrier()
+            # logging.info(f"{utcnow()} Rank {self.my_rank} processed {self.batch_size_eval} samples in {time() - t1} seconds")
+            self.time_to_process_eval_batch.append([utcnow(), epoch_number, time() - t1])
+            # t1 
+            t1 = time()
         return step - 1
 
     def _train(self, epoch_number):
@@ -127,7 +149,16 @@ class DLIOBenchmark(object):
         """
         step = 1
         total = math.ceil(self.num_samples * self.num_files_train / self.batch_size / self.comm_size)
+
+        # t1
+        t1 = time() 
         for batch in self.framework.get_reader().next():
+            # t2 - t1 = time to load a batch 
+            # Also getting time through utcnow() + logging, will this cause significant slow down?
+            # Maybe don't log and just hold counters in memory - if we do that though, each rank will have it's own values
+            # Can log the final values after the run and average between the ranks!
+            logging.debug(f"{utcnow()} Rank {self.my_rank} loaded {self.batch_size} samples in {time() - t1} seconds")
+            self.time_to_load_train_batch.append([utcnow(), epoch_number, time() - t1])
             if self.computation_time > 0:
                 self.framework.compute(epoch_number, step, self.computation_time)
             if self.arg_parser.args.checkpoint and step % self.arg_parser.args.steps_checkpoint == 0:
@@ -136,6 +167,10 @@ class DLIOBenchmark(object):
             if step > total:
                 return step - 1
             self.framework.barrier()
+            # logging.info(f"{utcnow()} Rank {self.my_rank} processed {self.batch_size} samples in {time() - t1} seconds")
+            self.time_to_process_train_batch.append([utcnow(), epoch_number, time() - t1])
+            # t1 
+            t1 = time()
         return step - 1
 
     def run(self):
@@ -166,7 +201,7 @@ class DLIOBenchmark(object):
                 self.framework.barrier()
 
                 if self.my_rank == 0:
-                    logging.info(f"{utcnow()} Training dataset loaded for all ranks in {time() - start_time} seconds")
+                    logging.info(f"{utcnow()} Training dataset initialized for all ranks in {time() - start_time} seconds")
                 
                 start_time = time()
                 steps = self._train(epoch_number)
@@ -174,6 +209,7 @@ class DLIOBenchmark(object):
 
                 if self.my_rank == 0:
                     logging.info(f"{utcnow()} Ending epoch {epoch_number} - {steps} steps completed in {time() - start_time} seconds")
+                    self.epoch_completion_times.append([utcnow(), epoch_number, time() - start_time])
 
                 self.framework.get_reader().finalize()
 
@@ -198,8 +234,13 @@ class DLIOBenchmark(object):
 
                     if self.my_rank == 0:
                         logging.info(f"{utcnow()} Ending eval - {steps} steps completed in {time() - start_time} seconds")
+                        self.eval_completion_times.append([utcnow(), epoch_number, time() - start_time])
 
                     self.framework.get_reader().finalize()
+
+    def save(self, df_like, name):
+        df = pd.DataFrame(df_like)
+        df.to_csv(os.path.join(self.output_folder, name), header=False, index=False)
 
     def finalize(self):
         """
@@ -208,8 +249,8 @@ class DLIOBenchmark(object):
         self.framework.barrier()
         if not self.arg_parser.args.generate_only:
             if self.arg_parser.args.profiling:
-                self.darshan.stop()
-                self.framework.stop_framework_profiler.stop()
+                self.iostat.stop()
+                # self.framework.stop_framework_profiler.stop()
                 self.framework.barrier()
                 if self.my_rank == 0:
                     logging.info(f"{utcnow()} profiling stopped")
@@ -220,9 +261,25 @@ class DLIOBenchmark(object):
                     if os.path.exists(self.arg_parser.args.data_folder):
                         shutil.rmtree(self.arg_parser.args.data_folder)
                         logging.info(f"{utcnow()} Deleted data files")
-        self.framework.barrier()
-        if self.my_rank == 0:
-            logging.info(f"{utcnow()} Finalized for all ranks")
+            
+            # Dump statistic counters to files for postprocessing
+            # Overall stats
+            if self.my_rank == 0:
+                self.save(self.epoch_completion_times, 'epoch_completion_times.csv')
+                self.save(self.eval_completion_times, 'eval_completion_times.csv')
+
+            # Save individual rank stats
+            self.save(self.time_to_load_train_batch, f'{self.my_rank}_time_to_load_train_batch.csv')
+            self.save(self.time_to_process_train_batch, f'{self.my_rank}_time_to_process_train_batch.csv')
+            self.save(self.time_to_load_eval_batch, f'{self.my_rank}_time_to_load_eval_batch.csv')
+            self.save(self.time_to_process_eval_batch, f'{self.my_rank}_time_to_process_eval_batch.csv')
+
+            self.framework.barrier()
+            if self.my_rank == 0:
+                # Postprocess results and generate summary statistics and a file
+                logging.info(f"{utcnow()} Rank 0 starting post processing")
+                postprocessor = DLIOPostProcessor(self.iostat_file)
+                postprocessor.generate_report()
 
 
 def main():

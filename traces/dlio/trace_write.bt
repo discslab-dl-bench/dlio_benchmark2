@@ -1,0 +1,77 @@
+#!/usr/local/bin/bpftrace
+
+#include <linux/fs.h>
+#include <linux/mm.h>
+
+
+BEGIN
+{
+	printf("%-17s %-8s %-8s %-10s %-10s %-8s\n", "TIMESTAMP", "PID", "TID", "COMM", "LAT (ns)", "FILENAME");
+}
+
+// ************************************************************
+// 	FILE WRITING
+// ************************************************************
+
+// tracepoint:syscalls:sys_enter_write
+//     int __syscall_nr;
+//     unsigned int fd;
+//     const char * buf;
+//     size_t count
+tracepoint:syscalls:sys_enter_write,
+tracepoint:syscalls:sys_enter_pwrite64
+/ 
+	comm == "python3" || comm == "mpirun" || comm == "horovodrun"
+/
+{
+	@write_start[tid] = nsecs;
+	@write_fd[tid] = args->fd; 
+	@write_requested[tid] = args->count;
+}
+
+// ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
+kprobe:vfs_write
+/ @write_start[tid] /
+{
+	@write_address[tid] = arg1;
+	@write_offset[tid] = *arg3;
+	@write_filename[tid] = str(((struct file *)arg0)->f_path.dentry->d_name.name);
+}
+
+tracepoint:syscalls:sys_exit_write,
+tracepoint:syscalls:sys_exit_pwrite64
+/ @write_start[tid] /
+{
+	$now = nsecs;
+	$latency = $now - @write_start[tid];
+
+	printf("%-17lu %-8d %-8d %s %-10d %s\n", 
+		$now,
+		pid,
+		tid,
+		comm,
+		$latency,
+		@write_filename[tid]
+	);
+
+	delete(@write_start[tid]);
+	delete(@write_fd[tid]);
+	delete(@write_address[tid]);
+	delete(@write_offset[tid]);
+	delete(@write_requested[tid]);
+	delete(@write_filename[tid]);
+}
+
+
+// ************************************************************
+// 	CLEANUP
+// ************************************************************
+END 
+{
+	clear(@write_start);
+	clear(@write_fd);
+	clear(@write_address);
+	clear(@write_offset);
+	clear(@write_requested);
+	clear(@write_filename);
+}

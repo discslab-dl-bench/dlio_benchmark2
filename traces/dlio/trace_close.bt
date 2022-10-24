@@ -1,0 +1,64 @@
+#!/usr/local/bin/bpftrace
+
+#include <linux/fs.h>
+#include <linux/mm.h>
+
+
+BEGIN
+{
+	printf("%-17s %-6s %-5s %-8s %s\n", "TIMESTAMP", "PID", "FD", "LAT(ns)", "FILENAME");
+}
+
+// ************************************************************
+// 	FILE CLOSING
+// ************************************************************
+// Note: Here we first catch the close() syscall, store the fd then
+// add it to the printout of the filp_close() kernel functions.
+
+//tracepoint:syscalls:sys_enter_close
+//    int __syscall_nr;
+//    unsigned int fd;
+tracepoint:syscalls:sys_enter_close
+/ 
+	comm == "python3" || comm == "mpirun" || comm == "horovodrun"
+/
+{	
+	@c_start[tid] = nsecs;
+	@c_fd[tid] = args->fd;
+}
+// int filp_close(struct file *filp, fl_owner_t id)
+kprobe:filp_close
+/ @c_start[tid] /
+{
+	@c_filename[tid] = str(((struct file *)arg0)->f_path.dentry->d_name.name);
+}
+
+tracepoint:syscalls:sys_exit_close
+/ @c_start[tid] /
+{	
+	$now = nsecs;
+	$latency = $now - @c_start[tid];
+	
+	printf("%-17lu %-6d %-5d %-8d %s\n", 
+		$now,
+		pid,
+		@c_fd[tid],
+		$latency,
+		@c_filename[tid]
+	);
+
+	delete(@c_start[tid]);
+	delete(@c_fd[tid]);
+	delete(@c_filename[tid]);
+}
+
+
+// ************************************************************
+// 	CLEANUP
+// ************************************************************
+END 
+{
+	clear(@c_start);
+	clear(@c_fd);
+	clear(@c_filename);
+}

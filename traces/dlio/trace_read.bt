@@ -1,0 +1,83 @@
+#!/usr/local/bin/bpftrace
+
+#include <linux/fs.h>
+#include <linux/mm.h>
+
+// Shortened version to fit everything in a single printf call to avoid output clash under heavy load
+
+BEGIN
+{
+	printf("%-17s %-8s %-8s %-12s %-12s %s\n", "TIMESTAMP", "PID", "TID", "COMM", "LAT(ns)", "FILENAME");
+}
+
+
+// ************************************************************
+// 	FILE READING
+// ************************************************************
+
+// We time the syscall but fetch some extra info from the vfs function
+
+// tracepoint:syscalls:sys_enter_read
+//     int __syscall_nr;
+//     unsigned int fd;
+//     char * buf;
+//     size_t count;
+tracepoint:syscalls:sys_enter_read,
+tracepoint:syscalls:sys_enter_pread64
+/ 
+	comm == "python3" || comm == "mpirun" || comm == "horovodrun"
+/
+{
+	@read_start[tid] = nsecs;
+	@read_fd[tid] = args->fd; 
+	@requested[tid] = args->count;
+}
+// ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
+kprobe:vfs_read
+/ @read_start[tid] /
+{
+	@address[tid] = arg1;
+	@offset[tid] = *arg3;
+	@filename[tid] = str(((struct file *)arg0)->f_path.dentry->d_name.name);
+}
+
+// tracepoint:syscalls:sys_exit_read
+//     int __syscall_nr;
+//     long ret;
+tracepoint:syscalls:sys_exit_read,
+tracepoint:syscalls:sys_exit_pread64
+/ @read_start[tid] /
+{
+	$now = nsecs;
+	$latency = $now - @read_start[tid];
+
+	printf("%-17lu %-8d %-8d %s %-12lu %s\n", 
+		$now,
+		pid,
+		tid,
+		comm,
+		$latency,
+		@filename[tid]
+	);
+
+	delete(@read_start[tid]);
+	delete(@read_fd[tid]);
+	delete(@address[tid]);
+	delete(@offset[tid]);
+	delete(@requested[tid]);
+	delete(@filename[tid]);
+}
+
+
+// ************************************************************
+// 	CLEANUP
+// ************************************************************
+END 
+{
+	clear(@read_start);
+	clear(@read_fd);
+	clear(@address);
+	clear(@offset);
+	clear(@requested);
+	clear(@filename);
+}

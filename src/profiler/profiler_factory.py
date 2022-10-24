@@ -13,6 +13,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+from profiler.iostat_profiler import IostatProfiler
 from src.common.error_code import ErrorCodes
 from src.profiler.darshan_profiler import DarshanProfiler
 from src.profiler.no_profiler import NoProfiler
@@ -25,9 +26,11 @@ class ProfilerFactory(object):
         pass
 
     @staticmethod
-    def get_profiler(type):
+    def get_profiler(type, *args):
         if type == Profiler.NONE:
             return NoProfiler()
+        if type == Profiler.IOSTAT:
+            return IostatProfiler.get_instance(*args)
         elif type == Profiler.DARSHAN:
             return DarshanProfiler.get_instance()
         elif type == Profiler.TENSORBOARD:

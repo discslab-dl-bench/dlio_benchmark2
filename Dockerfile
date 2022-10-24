@@ -13,7 +13,8 @@ WORKDIR /workspace/dlio
 
 RUN apt-get update && \
     apt-get upgrade -y && \
-    apt-get install -y git vim
+    apt-get install -y git vim sysstat
+    # apt-get install -y git vim sysstat bpftrace linux-headers-$(uname -r) linux-tools-$(uname -r)
 
 RUN pip install --upgrade pip
 RUN pip install --disable-pip-version-check -r requirements.txt
