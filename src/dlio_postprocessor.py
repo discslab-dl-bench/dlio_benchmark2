@@ -105,28 +105,31 @@ class DLIOPostProcessor:
             timerange = epoch_start_end_ts[epoch_start_end_ts['epoch_num'] == epoch]
             # Extract the values from the returned pd.Series objects
             self.epoch_timeranges[epoch] = (timerange['start'].iloc[0], timerange['end'].iloc[0])
+
+            duration = timerange['end'].iloc[0] - timerange['start'].iloc[0]
             self.per_epoch_stats[epoch] = {
                 'start': timerange['start'].iloc[0],
                 'end': timerange['end'].iloc[0],
-                'duration': timerange['end'].iloc[0] - timerange['start'].iloc[0]
+                'duration': dur.total_seconds()
             }
             # Save additional values for evals and checkpoiting, if relevant
             if self.do_eval and epoch in self.epochs_with_evals:
                 timerange = eval_start_end_ts[eval_start_end_ts['epoch_num'] == epoch]
                 self.eval_timeranges[epoch] = (timerange['start'].iloc[0], timerange['end'].iloc[0])
+                duration = timerange['end'].iloc[0] - timerange['start'].iloc[0]
                 self.per_epoch_stats[epoch]['eval'] = {
                     'start': timerange['start'].iloc[0],
                     'end': timerange['end'].iloc[0],
-                    'duration': timerange['end'].iloc[0] - timerange['start'].iloc[0]
+                    'duration': duration.total_seconds()
                 }
             if self.do_checkpoint and epoch in self.epochs_with_ckpts:
                 timerange = ckpt_start_end_ts[ckpt_start_end_ts['epoch_num'] == epoch]
                 self.ckpt_timeranges[epoch] = (timerange['start'].iloc[0], timerange['end'].iloc[0])
-
+                duration = timerange['end'].iloc[0] - timerange['start'].iloc[0]
                 self.per_epoch_stats[epoch]['ckpt'] = {
                     'start': timerange['start'].iloc[0],
                     'end': timerange['end'].iloc[0],
-                    'duration': timerange['end'].iloc[0] - timerange['start'].iloc[0]
+                    'duration': duration.total_seconds()
                 }
         
         # Get overall start, end and duration
@@ -181,16 +184,16 @@ class DLIOPostProcessor:
         
         # Save the overall stats
         self.overall_stats['samples/s'] = self.get_stats(all_loading_times)
-        self.overall_stats['loading_time'] = '{:.2f}'.format(sum(all_loading_times))
+        self.overall_stats['loading_time'] = '{:.2f}'.format(sum(all_loading_times) / self.comm_world)
         
         # Save the per epoch/eval stats
         for epoch, loading_times in epoch_loading_times.items():
             self.per_epoch_stats[epoch]['samples/s'] = self.get_stats(loading_times)
-            self.per_epoch_stats[epoch]['loading_time'] = '{:.2f}'.format(sum(loading_times))
+            self.per_epoch_stats[epoch]['loading_time'] = '{:.2f}'.format(sum(loading_times) / self.comm_world)
 
         for epoch, loading_times in eval_loading_times.items():
             self.per_epoch_stats[epoch]['eval']['samples/s'] = self.get_stats(loading_times)
-            self.per_epoch_stats[epoch]['eval']['loading_time'] = '{:.2f}'.format(sum(loading_times))
+            self.per_epoch_stats[epoch]['eval']['loading_time'] = '{:.2f}'.format(sum(loading_times) / self.comm_world)
 
 
     def parse_iostat_trace(self):
@@ -205,8 +208,8 @@ class DLIOPostProcessor:
         # Pandas can read the format, then we can convert to numpy datetime64
         cpu_stats = pd.DataFrame(columns=['timestamp', 'user', 'system', 'iowait', 'steal', 'idle'])
         # The following columns are available:
-        # ['timestamp', 'disk', 'r/s', 'w/s', 'rkB/s', 'wkB/s', 'r_await', 'w_await', 'rareq-sz', 'wareq-sz', 'aqu-sz'])
-        disk_stats = pd.DataFrame(columns=['timestamp', 'disk', 'r/s', 'w/s', 'rkB/s', 'wkB/s', 'r_await', 'w_await', 'aqu-sz'])
+        # ['timestamp', 'disk', 'r/s', 'w/s', 'rMB/s', 'wMB/s', 'r_await', 'w_await', 'rareq-sz', 'wareq-sz', 'aqu-sz'])
+        disk_stats = pd.DataFrame(columns=['timestamp', 'disk', 'r/s', 'w/s', 'rMB/s', 'wMB/s', 'r_await', 'w_await', 'aqu-sz'])
         cpu_i = 0
         disk_i = 0
         for item in iotrace:
@@ -217,7 +220,7 @@ class DLIOPostProcessor:
             cpu_i += 1
             # Add one row per disk
             for disk in item['disk']:
-                row = [ts, disk['disk_device'], disk['r/s'], disk['w/s'], disk['rkB/s'], disk['wkB/s'], disk['r_await'], disk['w_await'], disk['aqu-sz']]
+                row = [ts, disk['disk_device'], disk['r/s'], disk['w/s'], disk['rMB/s'], disk['wMB/s'], disk['r_await'], disk['w_await'], disk['aqu-sz']]
                 disk_stats.loc[disk_i] = row
                 disk_i += 1
         # Convert timestamp fields to datatime
@@ -264,7 +267,7 @@ class DLIOPostProcessor:
             for i, stat in enumerate(stats):
                 saveto[stat] = addto_and_return_stats(accumulators[i], data, stat)
 
-        stats_to_extract = ['rkB/s', 'wkB/s', 'r/s', 'w/s', 'r_await', 'w_await', 'aqu-sz']
+        stats_to_extract = ['rMB/s', 'wMB/s', 'r/s', 'w/s', 'r_await', 'w_await', 'aqu-sz']
         accumulators = [r_overall_bandwidth, w_overall_bandwidth, r_overall_iops, w_overall_iops, r_overall_wait, w_overall_wait, overall_aqu_sz]
         cpu_stats_to_extract = ['user', 'system', 'iowait', 'steal', 'idle']
         cpu_accumulators = [cpu_overall_user, cpu_overall_sys, cpu_overall_iowait, cpu_overall_steal, cpu_overall_idle]
@@ -321,8 +324,8 @@ class DLIOPostProcessor:
                                                 cpu_accumulators)
 
         # Compute overall stats
-        self.overall_stats['rkB/s'] = self.get_stats(r_overall_bandwidth)
-        self.overall_stats['wkB/s'] = self.get_stats(w_overall_bandwidth)
+        self.overall_stats['rMB/s'] = self.get_stats(r_overall_bandwidth)
+        self.overall_stats['wMB/s'] = self.get_stats(w_overall_bandwidth)
         self.overall_stats['r/s'] = self.get_stats(r_overall_iops)
         self.overall_stats['w/s'] = self.get_stats(w_overall_iops)
         self.overall_stats['r_await'] = self.get_stats(r_overall_wait)
@@ -344,55 +347,54 @@ class DLIOPostProcessor:
                 stats = "\t".join(stats.values())
             return stats
                 
-        def print_out_section(stats_dict, has_loading=True):
-            print(f"  Started:\t\t{stats_dict['start']}")
-            print(f"  Ended:\t\t{stats_dict['end']}")
-            print(f"  Duration:\t\t{stats_dict['duration']}")
+        def print_out_section(outfile, stats_dict, has_loading=True):
+            outfile.write(f"  Started:\t\t{stats_dict['start']}\n")
+            outfile.write(f"  Ended:\t\t{stats_dict['end']}\n")
+            outfile.write(f"  Duration (s):\t\t{stats_dict['duration']}\n")
             if has_loading:
-                print(f"  Loading Time (s):\t{stats_dict['loading_time']}")
-            print()
-            print("  \t\t\t\tmean\tstd\tmin\tmedian\tp90\tp99\tmax")
-            print("  \t\t\t\t-------------------------------------------------------")
+                outfile.write(f"  Avg Loading Time Per Process (s):\t{stats_dict['loading_time']}\n\n")
+            outfile.write("  \t\t\t\tmean\tstd\tmin\tmedian\tp90\tp99\tmax\n")
+            outfile.write("  \t\t\t\t-------------------------------------------------------\n")
             if has_loading:
-                print(f"  Samples/s:\t\t\t{print_stats(stats_dict['samples/s'])}")
-            print(f"  Read Bandwidth (kB/s):\t{print_stats(stats_dict['rkB/s'])}")
-            print(f"  Write Bandwidth (kB/s):\t{print_stats(stats_dict['wkB/s'])}")
-            print(f"  Read IOPS:\t\t\t{print_stats(stats_dict['r/s'])}")
-            print(f"  Write IOPS:\t\t\t{print_stats(stats_dict['w/s'])}")
-            print(f"  Read Avg Latency (ms):\t{print_stats(stats_dict['r_await'])}")
-            print(f"  Write Avg Latency (ms):\t{print_stats(stats_dict['w_await'])}")
-            print(f"  Avg Queue Length:\t\t{print_stats(stats_dict['aqu-sz'])}")
-            print(f"  CPU usage:")
-            print(f"    User (%):\t\t\t{print_stats(stats_dict['cpu']['user'])}")
-            print(f"    System (%):\t\t\t{print_stats(stats_dict['cpu']['system'])}")
-            print(f"    IO wait (%):\t\t{print_stats(stats_dict['cpu']['iowait'])}")
-            print(f"    Steal (%):\t\t\t{print_stats(stats_dict['cpu']['steal'])}")
-            print(f"    Idle (%):\t\t\t{print_stats(stats_dict['cpu']['idle'])}")
-            print()
+                outfile.write(f"  Samples/s:\t\t\t{print_stats(stats_dict['samples/s'])}\n")
+            outfile.write(f"  Read Bandwidth (MB/s):\t{print_stats(stats_dict['rMB/s'])}\n")
+            outfile.write(f"  Write Bandwidth (MB/s):\t{print_stats(stats_dict['wMB/s'])}\n")
+            outfile.write(f"  Read IOPS:\t\t\t{print_stats(stats_dict['r/s'])}\n")
+            outfile.write(f"  Write IOPS:\t\t\t{print_stats(stats_dict['w/s'])}\n")
+            outfile.write(f"  Read Avg Latency (ms):\t{print_stats(stats_dict['r_await'])}\n")
+            outfile.write(f"  Write Avg Latency (ms):\t{print_stats(stats_dict['w_await'])}\n")
+            outfile.write(f"  Avg Queue Length:\t\t{print_stats(stats_dict['aqu-sz'])}\n")
+            outfile.write(f"  CPU usage:\n")
+            outfile.write(f"    User (%):\t\t\t{print_stats(stats_dict['cpu']['user'])}\n")
+            outfile.write(f"    System (%):\t\t\t{print_stats(stats_dict['cpu']['system'])}\n")
+            outfile.write(f"    IO wait (%):\t\t{print_stats(stats_dict['cpu']['iowait'])}\n")
+            outfile.write(f"    Steal (%):\t\t\t{print_stats(stats_dict['cpu']['steal'])}\n")
+            outfile.write(f"    Idle (%):\t\t\t{print_stats(stats_dict['cpu']['idle'])}\n\n")
 
-        print("Overall\n")
-        print_out_section(self.overall_stats)
+        with open(os.path.join(self.outdir, "DLIO_report.txt"), 'w') as outfile:
+            outfile.write("Overall\n")
+            print_out_section(outfile, self.overall_stats)
 
-        print("Detailed Report\n")
+            outfile.write("Detailed Report\n")
 
-        i_eval = 1
-        i_ckpt = 1
-        for epoch in range(1, self.epochs+1):
-            
-            print(f"Epoch {epoch}")
-            print_out_section(self.per_epoch_stats[epoch])
+            i_eval = 1
+            i_ckpt = 1
+            for epoch in range(1, self.epochs+1):
+                
+                outfile.write(f"Epoch {epoch}\n")
+                print_out_section(outfile, self.per_epoch_stats[epoch])
 
-            # Check if we performed an evaluation in this epoch and gather stats if so
-            if epoch in self.epochs_with_evals:
-                print(f"Eval {i_eval}")
-                print_out_section(self.per_epoch_stats[epoch]['eval'])
-                i_eval += 1
-            
-            # Ckpt will be missing some stats
-            if epoch in self.epochs_with_ckpts:
-                print(f"Checkpoint {i_ckpt}")
-                print_out_section(self.per_epoch_stats[epoch]['ckpt'], False)
-                i_ckpt += 1
+                # Check if we performed an evaluation in this epoch and gather stats if so
+                if epoch in self.epochs_with_evals:
+                    outfile.write(f"Eval {i_eval}\n")
+                    print_out_section(outfile, self.per_epoch_stats[epoch]['eval'])
+                    i_eval += 1
+                
+                # Ckpt will be missing some stats
+                if epoch in self.epochs_with_ckpts:
+                    outfile.write(f"Checkpoint {i_ckpt}\n")
+                    print_out_section(outfile, self.per_epoch_stats[epoch]['ckpt'], False)
+                    i_ckpt += 1
 
     def generate_report(self):
         # For each rank, gather stats
@@ -412,20 +414,21 @@ def main():
     """
     parser = argparse.ArgumentParser(description='DLIO PostProcessor')
     
-    parser.add_argument("-bs", "--batch-size", default=1, type=int,
-                        help="Per worker batch size for training records.")
+    parser.add_argument("-of", "--output-folder", default="./output", type=str,
+                        help="Folder containing the output of a benchmark run.")
     parser.add_argument("-np", "--num-proc", default=1, type=int,
                         help="Number of processes that were ran.")
-    parser.add_argument("-of", "--output-folder", default="./output", type=str,
-                        help="Set the path of folder where output can be generated (checkpoints and logs)")
-    parser.add_argument("-de", "--do-eval", default=False, type=str2bool,
-                        help="If we should simulate evaluation (single rank only for now). See -et, -eae and -eee to configure.")
-    parser.add_argument("-bse", "--batch-size-eval", default=1, type=int,
-                        help="Per worker batch size for evaluation records.")
     parser.add_argument("-e", "--epochs", default=1, type=int,
                         help="Number of epochs to be emulated within benchmark.")
+    parser.add_argument("-bs", "--batch-size", default=1, type=int,
+                        help="Per worker batch size for training records.")
+    parser.add_argument("-de", "--do-eval", default=False, type=str2bool,
+                        help="If evaluations were simulated.")
+    parser.add_argument("-bse", "--batch-size-eval", default=1, type=int,
+                        help="Per worker batch size for evaluation records.")
     parser.add_argument("-c", "--checkpoint", default=False, type=str2bool,
-                        help="Enable checkpoint within benchmark. y/n")
+                        help="If checkpointing was simulated")
+
     args = parser.parse_args()
     postproc = DLIOPostProcessor(args)
     postproc.generate_report()

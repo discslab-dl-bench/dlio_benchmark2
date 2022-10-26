@@ -139,6 +139,8 @@ class ArgumentParser(object):
                                  help="Epoch number after which to start evaluating")
         self.parser.add_argument("-eee", "--eval-every-epoch", default=0, type=int,
                                  help="Evaluation frequency: evaluate every x epochs")
+        self.parser.add_argument("-mos", "--model-size", default=10240, type=int,
+                                 help="Size of the model (for checkpointing) in bytes")
 
         self.args = self.parser.parse_args()
         self._validate()
@@ -148,5 +150,4 @@ class ArgumentParser(object):
         TODO: MULTI FILES should have files more than nranks
         TODO: SHARED FILE should have file equal to 1
         '''
-
         pass

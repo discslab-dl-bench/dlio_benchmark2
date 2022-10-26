@@ -17,15 +17,12 @@ usage() {
 }
 
 main() {
-
 	if [ "${EUID:-$(id -u)}" -ne 0 ]
 	then
 		echo "Run script as root"
 		usage
 		exit 1
 	fi
-
-	SCRIPT_DIR=$( dirname -- "$( readlink -f -- "$0"; )" )
 
 	# Defaults
 	DATA_DIR=${SCRIPT_DIR}/data

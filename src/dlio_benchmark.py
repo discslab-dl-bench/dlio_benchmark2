@@ -163,13 +163,26 @@ class DLIOBenchmark(object):
         :return: returns total steps.
         """
         step = 1
+        block_num = 1
         total = math.ceil(self.num_samples * self.num_files_train / self.batch_size / self.comm_size)
+        
+        start_ts = utcnow()
 
+        # Initial checkpointing
+        if self.arg_parser.args.my_rank == 0:
+            self.framework.checkpoint(0)
+        self.framework.barrier()
+        self.ckpt_time_ranges.append([epoch_number, start_ts, utcnow()])
         t1 = time() 
+
         for batch in self.framework.get_reader().next():
+            # The next step after a checkpoint start a new block
+            if step % self.arg_parser.args.steps_checkpoint == 1 and self.arg_parser.args.my_rank == 0:
+                logging.info("{} Starting block: {}".format(utcnow(), block_num))
+            
             logging.debug(f"{utcnow()} Rank {self.my_rank} loaded {self.batch_size} samples in {time() - t1} seconds")
             self.time_to_load_train_batch.append([utcnow(), epoch_number, time() - t1])
-
+            
             if self.computation_time > 0:
                 self.framework.compute(epoch_number, step, self.computation_time)
 
@@ -180,10 +193,14 @@ class DLIOBenchmark(object):
             t1 = time()
             start_ts = utcnow()
             if self.my_rank == 0 and self.do_checkpoint and step % self.steps_checkpoint == 0:
+                logging.info("{} Ending block: {}".format(utcnow(), block_num))
+                block_num += 1
                 self.framework.checkpoint(step)
-            self.ckpt_time_ranges.append([epoch_number, start_ts, utcnow()])
 
+            self.framework.barrier()
+            self.ckpt_time_ranges.append([epoch_number, start_ts, utcnow()])
             step += 1
+
             if step > total:
                 return step - 1
 
