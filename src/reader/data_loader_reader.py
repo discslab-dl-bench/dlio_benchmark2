@@ -88,11 +88,8 @@ class DataLoaderReader(FormatReader):
         dataset = self._dataset
         logging.debug(f"{utcnow()} Rank {self.my_rank} should read {len(dataset)} batches")
 
-        t1 = time()
         for batch in dataset:   
-            logging.info(f"{utcnow()} Rank {self.my_rank} data_loader_reader returned batch in {time() - t1} seconds")
             yield batch
-            t1 = time()
 
     def finalize(self):
         pass

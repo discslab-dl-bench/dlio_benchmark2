@@ -121,6 +121,8 @@ class ArgumentParser(object):
                                  help="Level of compression for GZip.")
         self.parser.add_argument("-d", "--debug", default=False, type=str2bool,
                                  help="Enable debug in code.")
+        self.parser.add_argument("-pp", "--postproc-only", default=False, type=str2bool,
+                                 help="Do not run benchmark, only postprocess results of a previous run.")
 
         # Added to support periodic evaluation on a held-out test set
         # E.g. this is used by the image segmentation workload to determine if 

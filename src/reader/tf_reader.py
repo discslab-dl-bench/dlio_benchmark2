@@ -102,13 +102,8 @@ class TFReader(FormatReader):
         # The previous version crashed when all workers could not generate the same amount of batches
         # Using the inbuilt tensorflow dataset iteration seems to work fine, was there an advantage of doing it the old way?
         # t1
-        t1 = time() 
         for batch in dataset:
-            # t2
-            logging.info(f"{utcnow()} Rank {self.my_rank} tf_reader returned batch in {time() - t1} seconds")
             yield batch
-            # t1
-            t1 = time()
 
     def finalize(self):
         pass

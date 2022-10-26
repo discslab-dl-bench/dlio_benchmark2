@@ -12,6 +12,10 @@ For this, we have added the following features:
 
 These additions have only been tested for TFRecord files, and PyTorch Dataloader with NPZ files as this is what our workload use. Because of this, other functionality is probably broken. More specifically, we're not trying to support the HDF5, CSV and NPZ readers, and we don't use Darshan or Tensorboard profiling.
 
+# Need to flush the caches after data generation
+
+Unfortunately, we can't flush the caches from within the container so we'll have to separate the data generation and benchmark run fully, with a sync && echo 3 > /proc/sys/vm/drop_caches between them.
+
 # Current Limitations
 
 There is an abtraction problem where DLIO considers PyTorch's data loader as a data type when it really is data type agnostic.

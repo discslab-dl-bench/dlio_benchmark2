@@ -32,8 +32,7 @@ class IostatProfiler(IOProfiler):
     def __init__(self, logfile):
         super().__init__()
         self.my_rank = self._arg_parser.args.my_rank
-        self.logfile = open(logfile, 'a')
-        self.process = None
+        self.logfile = logfile
         """ Virtually private constructor. """
         if IostatProfiler.__instance is not None:
             raise Exception("This class is a singleton!")
@@ -42,14 +41,17 @@ class IostatProfiler(IOProfiler):
 
     def start(self):
         if self.my_rank == 0:
+            # Open the logfile for writing
+            self.logfile = open(self.logfile, 'w')
             #TODO: Get the relevant disks (from user input?)
-            cmd = ["iostat", "-dxty", "-o", "JSON", "sda", "sdb", "1"]
+            cmd = ["iostat", "-dxtcy", "-o", "JSON", "sda", "sdb", "1"]
             self.process = sp.Popen(cmd, stdout=self.logfile, stderr=self.logfile)
 
     def stop(self):
         if self.my_rank == 0:
             self.logfile.flush()
             self.logfile.close()
-            self.process.send_signal(signal.SIGINT) # If we send a stronger signal, the logfile won't be ended correctly
+            # If we send a stronger signal, the logfile json won't be ended correctly
+            self.process.send_signal(signal.SIGINT) 
+            # Might need a timeout here in case it hangs forever
             self.process.wait()
-            # Might have to have a timeout counter here if it hangs forever

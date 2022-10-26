@@ -14,7 +14,7 @@
    limitations under the License.
 """
 from time import time
-from postprocessing.dlio_postprocesser import DLIOPostProcessor
+from postproc.postprocessor import DLIOPostProcessor
 
 from src.common.enumerations import Profiler
 from src.data_generator.generator_factory import GeneratorFactory
@@ -53,7 +53,7 @@ class DLIOBenchmark(object):
         self.arg_parser = ArgumentParser.get_instance()
         self.output_folder = self.arg_parser.args.output_folder
         self.logfile = os.path.join(self.output_folder, self.arg_parser.args.log_file)
-        self.iostat_file = os.path.join(self.output_folder, 'iostat.out')
+        self.iostat_file = os.path.join(self.output_folder, 'iostat.json')
 
         # Configure the logging library
         log_level = logging.DEBUG if self.arg_parser.args.debug else logging.INFO
@@ -68,19 +68,30 @@ class DLIOBenchmark(object):
 
         self.framework = FrameworkFactory().get_framework(self.arg_parser.args.framework,
                                                           self.arg_parser.args.profiling)
+
         self.my_rank = self.arg_parser.args.my_rank = self.framework.rank()
         self.comm_size = self.arg_parser.args.comm_size = self.framework.size()
         self.framework.init_reader(self.arg_parser.args.format)
-        self.iostat = None
+
+        self.generate_only = self.arg_parser.args.generate_only
+        self.postproc_only = self.arg_parser.args.postproc_only
+        self.do_profiling = self.arg_parser.args.profiling
+
         self.data_generator = None
         self.num_files_train = self.arg_parser.args.num_files_train
         self.num_samples = self.arg_parser.args.num_samples
         self.batch_size = self.arg_parser.args.batch_size
         self.computation_time = self.arg_parser.args.computation_time
-        if self.arg_parser.args.profiling:
+        
+        if self.do_profiling:
             self.iostat = ProfilerFactory().get_profiler(Profiler.IOSTAT, self.iostat_file)
+
         if self.arg_parser.args.generate_data:
             self.data_generator = GeneratorFactory.get_generator(self.arg_parser.args.format)
+
+        # Checkpointing support
+        self.do_checkpoint = self.arg_parser.args.checkpoint
+        self.steps_checkpoint = self.arg_parser.args.steps_checkpoint
         # Evaluation support
         self.do_eval = self.arg_parser.args.do_eval
         self.num_files_eval = self.arg_parser.args.num_files_eval
@@ -96,8 +107,10 @@ class DLIOBenchmark(object):
         self.time_to_load_eval_batch = []
         self.time_to_process_eval_batch = []
 
-        self.epoch_completion_times = []
-        self.eval_completion_times = []
+        self.epoch_time_ranges = []
+        self.eval_time_ranges = []
+
+        self.ckpt_time_ranges = []
 
     def initialize(self):
         """
@@ -112,7 +125,8 @@ class DLIOBenchmark(object):
             logging.info(f"{utcnow()} Starting data generation")
             self.data_generator.generate()
             logging.info(f"{utcnow()} Generation done")
-        if self.arg_parser.args.profiling:
+
+        if self.do_profiling and not self.postproc_only:
             self.iostat.start()
             # self.framework.start_framework_profiler()
             self.framework.barrier()
@@ -128,17 +142,18 @@ class DLIOBenchmark(object):
         total = math.ceil(self.num_samples * self.num_files_eval / self.batch_size_eval / self.comm_size)
         t1 = time() 
         for batch in self.framework.get_reader().next():
-            # logging.info(f"{utcnow()} Rank {self.my_rank} loaded {self.batch_size_eval} samples in {time() - t1} seconds")
+            logging.info(f"{utcnow()} Rank {self.my_rank} loaded {self.batch_size_eval} samples in {time() - t1} seconds")
+
             self.time_to_load_eval_batch.append([utcnow(), epoch_number, time() - t1])
             if self.eval_time > 0:
                 self.framework.compute(epoch_number, step, self.eval_time)
+
+            self.time_to_process_eval_batch.append([utcnow(), epoch_number, time() - t1])
             step += 1
             if step > total:
                 return step - 1
             self.framework.barrier()
-            # logging.info(f"{utcnow()} Rank {self.my_rank} processed {self.batch_size_eval} samples in {time() - t1} seconds")
-            self.time_to_process_eval_batch.append([utcnow(), epoch_number, time() - t1])
-            # t1 
+            logging.info(f"{utcnow()} Rank {self.my_rank} processed {self.batch_size_eval} samples in {time() - t1} seconds")
             t1 = time()
         return step - 1
 
@@ -150,26 +165,29 @@ class DLIOBenchmark(object):
         step = 1
         total = math.ceil(self.num_samples * self.num_files_train / self.batch_size / self.comm_size)
 
-        # t1
         t1 = time() 
         for batch in self.framework.get_reader().next():
-            # t2 - t1 = time to load a batch 
-            # Also getting time through utcnow() + logging, will this cause significant slow down?
-            # Maybe don't log and just hold counters in memory - if we do that though, each rank will have it's own values
-            # Can log the final values after the run and average between the ranks!
             logging.debug(f"{utcnow()} Rank {self.my_rank} loaded {self.batch_size} samples in {time() - t1} seconds")
             self.time_to_load_train_batch.append([utcnow(), epoch_number, time() - t1])
+
             if self.computation_time > 0:
                 self.framework.compute(epoch_number, step, self.computation_time)
-            if self.arg_parser.args.checkpoint and step % self.arg_parser.args.steps_checkpoint == 0:
+
+            self.framework.barrier()
+            self.time_to_process_train_batch.append([utcnow(), epoch_number, time() - t1])
+            logging.info(f"{utcnow()} Rank {self.my_rank} processed {self.batch_size} samples in {time() - t1} seconds")
+
+            t1 = time()
+            start_ts = utcnow()
+            if self.my_rank == 0 and self.do_checkpoint and step % self.steps_checkpoint == 0:
                 self.framework.checkpoint(step)
+            self.ckpt_time_ranges.append([epoch_number, start_ts, utcnow()])
+
             step += 1
             if step > total:
                 return step - 1
+
             self.framework.barrier()
-            # logging.info(f"{utcnow()} Rank {self.my_rank} processed {self.batch_size} samples in {time() - t1} seconds")
-            self.time_to_process_train_batch.append([utcnow(), epoch_number, time() - t1])
-            # t1 
             t1 = time()
         return step - 1
 
@@ -179,7 +197,7 @@ class DLIOBenchmark(object):
         On each epoch, it prepares dataset for reading, it trains, and finalizes the dataset.
         If evaluation is enabled, it reads the eval dataset, performs evaluation and finalizes.
         """
-        if not self.arg_parser.args.generate_only:
+        if not (self.generate_only or self.postproc_only):
             # Print out the expected number of steps for each epoch and evaluation
             if self.my_rank == 0:
                 total = math.ceil(self.num_samples * self.num_files_train / self.batch_size / self.comm_size)
@@ -191,7 +209,7 @@ class DLIOBenchmark(object):
             # Keep track of the next epoch at which we will evaluate
             next_eval_at = self.eval_after_epoch
             for epoch_number in range(1, self.arg_parser.args.epochs + 1):
-                
+                start_ts = utcnow()
                 if self.my_rank == 0:
                     logging.info(f"{utcnow()} Starting epoch {epoch_number}")
 
@@ -209,12 +227,13 @@ class DLIOBenchmark(object):
 
                 if self.my_rank == 0:
                     logging.info(f"{utcnow()} Ending epoch {epoch_number} - {steps} steps completed in {time() - start_time} seconds")
-                    self.epoch_completion_times.append([utcnow(), epoch_number, time() - start_time])
+                    self.epoch_time_ranges.append([epoch_number, start_ts, utcnow()])
 
                 self.framework.get_reader().finalize()
 
                 # Perform evaluation if enabled
                 if self.do_eval and epoch_number == next_eval_at:
+                    start_ts = utcnow()
                     next_eval_at += self.eval_every_epoch
                 
                     if self.my_rank == 0:
@@ -234,11 +253,14 @@ class DLIOBenchmark(object):
 
                     if self.my_rank == 0:
                         logging.info(f"{utcnow()} Ending eval - {steps} steps completed in {time() - start_time} seconds")
-                        self.eval_completion_times.append([utcnow(), epoch_number, time() - start_time])
+                        self.eval_time_ranges.append([epoch_number, start_ts, utcnow()])
 
                     self.framework.get_reader().finalize()
 
     def save(self, df_like, name):
+        """
+        Helper function to save a dataframe-like to a csv.
+        """
         df = pd.DataFrame(df_like)
         df.to_csv(os.path.join(self.output_folder, name), header=False, index=False)
 
@@ -247,8 +269,8 @@ class DLIOBenchmark(object):
         It finalizes the dataset once training is completed.
         """
         self.framework.barrier()
-        if not self.arg_parser.args.generate_only:
-            if self.arg_parser.args.profiling:
+        if not (self.generate_only or self.postproc_only):
+            if self.do_profiling:
                 self.iostat.stop()
                 # self.framework.stop_framework_profiler.stop()
                 self.framework.barrier()
@@ -265,21 +287,25 @@ class DLIOBenchmark(object):
             # Dump statistic counters to files for postprocessing
             # Overall stats
             if self.my_rank == 0:
-                self.save(self.epoch_completion_times, 'epoch_completion_times.csv')
-                self.save(self.eval_completion_times, 'eval_completion_times.csv')
+                self.save(self.epoch_time_ranges, 'epoch_time_ranges.csv')
+                if self.do_eval:
+                    self.save(self.eval_time_ranges, 'eval_time_ranges.csv')
+                if self.do_checkpoint:
+                    self.save(self.ckpt_time_ranges, f'ckpt_time_ranges.csv')
 
             # Save individual rank stats
             self.save(self.time_to_load_train_batch, f'{self.my_rank}_time_to_load_train_batch.csv')
             self.save(self.time_to_process_train_batch, f'{self.my_rank}_time_to_process_train_batch.csv')
-            self.save(self.time_to_load_eval_batch, f'{self.my_rank}_time_to_load_eval_batch.csv')
-            self.save(self.time_to_process_eval_batch, f'{self.my_rank}_time_to_process_eval_batch.csv')
+            if self.do_eval:
+                self.save(self.time_to_load_eval_batch, f'{self.my_rank}_time_to_load_eval_batch.csv')
+                self.save(self.time_to_process_eval_batch, f'{self.my_rank}_time_to_process_eval_batch.csv')
 
-            self.framework.barrier()
-            if self.my_rank == 0:
-                # Postprocess results and generate summary statistics and a file
-                logging.info(f"{utcnow()} Rank 0 starting post processing")
-                postprocessor = DLIOPostProcessor(self.iostat_file)
-                postprocessor.generate_report()
+        self.framework.barrier()
+        if self.my_rank == 0:
+            # Postprocess results and generate summary statistics and a file
+            logging.info(f"{utcnow()} Rank 0 starting post processing")
+            postprocessor = DLIOPostProcessor(self.iostat_file)
+            postprocessor.generate_report()
 
 
 def main():
