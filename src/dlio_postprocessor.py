@@ -110,7 +110,7 @@ class DLIOPostProcessor:
             self.per_epoch_stats[epoch] = {
                 'start': timerange['start'].iloc[0],
                 'end': timerange['end'].iloc[0],
-                'duration': dur.total_seconds()
+                'duration': duration.total_seconds()
             }
             # Save additional values for evals and checkpoiting, if relevant
             if self.do_eval and epoch in self.epochs_with_evals:
@@ -184,16 +184,16 @@ class DLIOPostProcessor:
         
         # Save the overall stats
         self.overall_stats['samples/s'] = self.get_stats(all_loading_times)
-        self.overall_stats['loading_time'] = '{:.2f}'.format(sum(all_loading_times) / self.comm_world)
+        self.overall_stats['loading_time'] = '{:.2f}'.format(sum(all_loading_times) / self.comm_size)
         
         # Save the per epoch/eval stats
         for epoch, loading_times in epoch_loading_times.items():
             self.per_epoch_stats[epoch]['samples/s'] = self.get_stats(loading_times)
-            self.per_epoch_stats[epoch]['loading_time'] = '{:.2f}'.format(sum(loading_times) / self.comm_world)
+            self.per_epoch_stats[epoch]['loading_time'] = '{:.2f}'.format(sum(loading_times) / self.comm_size)
 
         for epoch, loading_times in eval_loading_times.items():
             self.per_epoch_stats[epoch]['eval']['samples/s'] = self.get_stats(loading_times)
-            self.per_epoch_stats[epoch]['eval']['loading_time'] = '{:.2f}'.format(sum(loading_times) / self.comm_world)
+            self.per_epoch_stats[epoch]['eval']['loading_time'] = '{:.2f}'.format(sum(loading_times) / self.comm_size)
 
 
     def parse_iostat_trace(self):

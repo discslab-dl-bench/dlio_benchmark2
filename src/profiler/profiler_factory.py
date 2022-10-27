@@ -26,11 +26,11 @@ class ProfilerFactory(object):
         pass
 
     @staticmethod
-    def get_profiler(type, *args):
+    def get_profiler(type):
         if type == Profiler.NONE:
             return NoProfiler()
-        if type == Profiler.IOSTAT:
-            return IostatProfiler.get_instance(*args)
+        # if type == Profiler.IOSTAT:
+        #     return IostatProfiler.get_instance(*args)
         elif type == Profiler.DARSHAN:
             return DarshanProfiler.get_instance()
         elif type == Profiler.TENSORBOARD:

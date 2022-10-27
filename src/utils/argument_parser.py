@@ -82,7 +82,7 @@ class ArgumentParser(object):
         self.parser.add_argument("-df", "--data-folder", default="./data", type=str,
                                  help="Set the path of folder where data is present in top-level.")
         self.parser.add_argument("-of", "--output-folder", default="./output", type=str,
-                                 help="Set the path of folder where output can be generated (checkpoints and logs)")
+                                 help="Set the path of folder where output can be generated (checkpoint files and logs)")
         self.parser.add_argument("-lf", "--log-file", default="dlio.log", type=str,
                                  help="Name of the logfile")
         self.parser.add_argument("-fp", "--file-prefix", default="img", type=str,
@@ -96,9 +96,13 @@ class ArgumentParser(object):
         self.parser.add_argument("-s", "--seed", default=123, type=int,
                                  help="The seed to be used shuffling during read/memory.")
         self.parser.add_argument("-c", "--checkpoint", default=False, type=str2bool,
-                                 help="Enable checkpoint within benchmark. y/n")
-        self.parser.add_argument("-sc", "--steps-checkpoint", default=0, type=int,
-                                 help="How many steps to enable checkpoint.")
+                                 help="Enable checkpointing. y/n")
+        self.parser.add_argument("-cae", "--checkpoint-after-epoch", default=0, type=int,
+                                 help="Epoch number after which to enable periodic checkpointing.")
+        self.parser.add_argument("-ce", "--checkpoint-epochs", default=1, type=int,
+                                 help="Number of epochs between checkpoints.")
+        self.parser.add_argument("-sc", "--checkpoint-steps", default=1, type=int,
+                                 help="Number of steps between checkpoints.")
         self.parser.add_argument("-ts", "--transfer-size", default=None, type=int,
                                  help="Transfer Size for tensorflow buffer size.")
         self.parser.add_argument("-tr", "--read-threads", default=1, type=int,
