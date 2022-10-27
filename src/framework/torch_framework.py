@@ -13,6 +13,7 @@ from time import sleep
 import horovod.torch as hvd
 
 from src.reader.reader_factory import ReaderFactory
+from utils.argument_parser import ArgumentParser
 
 hvd.init()
 
@@ -79,21 +80,19 @@ class TorchFramework(Framework):
         return DummyTraceObject(string, step, r)
 
     def checkpoint(self, step_number):
-        logging.info(f"{utcnow()} Starting checkpoint: Step {step_number}")
-        """
-        Performs Checkpointing for a specific step number. It writes different file of different sizes.
-        """
-        output_folder = self.arg_parser.args.output_folder
-        if not os.path.exists(output_folder):
-            os.makedirs(output_folder)
+        if self.rank() == 0:
+            """
+            Performs Checkpointing for a specific step number. It writes different file of different sizes.
+            """
+            if not os.path.exists(self.output_folder):
+                os.makedirs(self.output_folder)
 
-        model_file = os.path.join(output_folder, f"model_{step_number}_{self.args.my_rank}.bin")
+            model_file = os.path.join(self.output_folder, f"model_{step_number}_{self.args.my_rank}.bin")
 
-        f = open(model_file, "w")
-        string_val = "x" * self.args.model_size 
-        f.write(string_val)
-        f.close()
-        logging.info(f"{utcnow()} Ending checkpoint: Step {step_number}")
+            f = open(model_file, "w")
+            string_val = "x" * self.args.model_size 
+            f.write(string_val)
+            f.close()
 
     def compute(self, epoch_number, step, computation_time):
         torch_sleep(computation_time)

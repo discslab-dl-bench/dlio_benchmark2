@@ -21,6 +21,7 @@ class DummyTraceObject(object):
 class Framework(ABC):
     def __init__(self):
         self.args = ArgumentParser.get_instance().args
+        self.output_folder = self.args.output_folder
         pass
 
     @abstractmethod

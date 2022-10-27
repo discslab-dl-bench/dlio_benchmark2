@@ -66,32 +66,30 @@ class TFFramework(Framework):
         return tf.profiler.experimental.Trace(string, step_num=step, _r=r)
 
     def checkpoint(self, step_number):
-        logging.info(f"{utcnow()} Starting checkpoint: Step {step_number}")
         """
         Performs Checkpointing for a specific step number. It writes different file of different sizes.
         """
-        output_folder = self.arg_parser.args.output_folder
-        if not os.path.exists(output_folder):
-            os.makedirs(output_folder)
+        if self.rank() == 0:
+            if not os.path.exists(self.output_folder):
+                os.makedirs(self.output_folder)
 
-        model_file = os.path.join(output_folder, f"model_{step_number}_{self.args.my_rank}.bin")
-        meta_file = os.path.join(output_folder, f"meta_{step_number}_{self.args.my_rank}.bin")
-        index_file = os.path.join(output_folder, f"index_{step_number}_{self.args.my_rank}.bin")
+            model_file = os.path.join(self.output_folder, f"model_{step_number}_{self.args.my_rank}.bin")
+            meta_file = os.path.join(self.output_folder, f"meta_{step_number}_{self.args.my_rank}.bin")
+            index_file = os.path.join(self.output_folder, f"index_{step_number}_{self.args.my_rank}.bin")
 
-        f = open(model_file, "w")
-        string_val = "x" * self.args.model_size 
-        f.write(string_val)
-        f.close()
-        # Should these scale with the model size?
-        f = open(index_file, "w")
-        string_val = "x" * (17371)
-        f.write(string_val)
-        f.close()
-        f = open(meta_file, "w")
-        string_val = "x" * (24740228)
-        f.write(string_val)
-        f.close()
-        logging.info(f"{utcnow()} Ending checkpoint: Step {step_number}")
+            f = open(model_file, "w")
+            string_val = "x" * self.args.model_size 
+            f.write(string_val)
+            f.close()
+            # Should these scale with the model size?
+            f = open(index_file, "w")
+            string_val = "x" * (17371)
+            f.write(string_val)
+            f.close()
+            f = open(meta_file, "w")
+            string_val = "x" * (24740228)
+            f.write(string_val)
+            f.close()
 
     def compute(self, epoch_number, step, computation_time):
         tf.function(self.model)(epoch_number, step, computation_time)

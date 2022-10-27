@@ -99,9 +99,9 @@ class ArgumentParser(object):
                                  help="Enable checkpointing. y/n")
         self.parser.add_argument("-cae", "--checkpoint-after-epoch", default=0, type=int,
                                  help="Epoch number after which to enable periodic checkpointing.")
-        self.parser.add_argument("-ce", "--checkpoint-epochs", default=1, type=int,
+        self.parser.add_argument("-cee", "--checkpoint-every-epochs", default=1, type=int,
                                  help="Number of epochs between checkpoints.")
-        self.parser.add_argument("-sc", "--checkpoint-steps", default=1, type=int,
+        self.parser.add_argument("-ces", "--checkpoint-every-steps", default=1, type=int,
                                  help="Number of steps between checkpoints.")
         self.parser.add_argument("-ts", "--transfer-size", default=None, type=int,
                                  help="Transfer Size for tensorflow buffer size.")
