@@ -16,6 +16,8 @@ These additions have only been tested for TFRecord files, and PyTorch Dataloader
 
 Unfortunately, we can't flush the caches from within the container so we'll have to separate the data generation and benchmark run fully, with a sync && echo 3 > /proc/sys/vm/drop_caches between them.
 
+# Need to check the timezone of the timestamp and input the correct offset to get to UTC
+
 # Current Limitations
 
 There is an abtraction problem where DLIO considers PyTorch's data loader as a data type when it really is data type agnostic.

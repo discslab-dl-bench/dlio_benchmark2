@@ -52,8 +52,19 @@ class DLIOBenchmark(object):
         """
         self.arg_parser = ArgumentParser.get_instance()
         self.output_folder = self.arg_parser.args.output_folder
+        self.framework = FrameworkFactory().get_framework(self.arg_parser.args.framework,
+                                                          self.arg_parser.args.profiling)
+
+        self.my_rank = self.arg_parser.args.my_rank = self.framework.rank()
+        self.comm_size = self.arg_parser.args.comm_size = self.framework.size()
+        self.framework.init_reader(self.arg_parser.args.format)
+
         self.logfile = os.path.join(self.output_folder, self.arg_parser.args.log_file)
-        # self.iostat_file = os.path.join(self.output_folder, 'iostat.json')
+
+        # Delete previous logfile
+        if self.my_rank == 0:
+            if os.path.isfile(self.logfile):
+                os.remove(self.logfile)
 
         # Configure the logging library
         log_level = logging.DEBUG if self.arg_parser.args.debug else logging.INFO
@@ -66,12 +77,6 @@ class DLIOBenchmark(object):
             format='%(message)s [%(pathname)s:%(lineno)d]'  # logging's max timestamp resolution is msecs, we will pass in usecs in the message
         )
 
-        self.framework = FrameworkFactory().get_framework(self.arg_parser.args.framework,
-                                                          self.arg_parser.args.profiling)
-
-        self.my_rank = self.arg_parser.args.my_rank = self.framework.rank()
-        self.comm_size = self.arg_parser.args.comm_size = self.framework.size()
-        self.framework.init_reader(self.arg_parser.args.format)
 
         self.generate_only = self.arg_parser.args.generate_only
         self.do_profiling = self.arg_parser.args.profiling
@@ -180,15 +185,18 @@ class DLIOBenchmark(object):
         block = 1   # A continuous period of training steps, ended by checkpointing
         block_step = overall_step = 1   # Steps are taken within blocks
         max_steps = math.ceil(self.num_samples * self.num_files_train / self.batch_size / self.comm_size)
-        
+
+        # Start the very first block
+        self.stats.start_block(epoch, block)
+
         t0 = time()
         for batch in self.framework.get_reader().next():
             self.stats.batch_loaded(epoch, block, t0)
             
             # self.time_to_load_train_batch.append([utcnow(), epoch, time() - t0])
 
-            # Blocks are periods of training steps separated by checkpointing
-            if block_step == 1:
+            # Log a new block, unless it's the first one which we've already logged before the loop
+            if block_step == 1 and block != 1:
                 self.stats.start_block(epoch, block)
             
             if self.computation_time > 0:
@@ -246,6 +254,7 @@ class DLIOBenchmark(object):
                 # Initialize the dataset
                 self.framework.get_reader().read(epoch, do_eval=False)
                 self.framework.barrier()
+                # self.stats.end_init(epoch)
 
                 self._train(epoch)
                 self.stats.end_epoch(epoch)

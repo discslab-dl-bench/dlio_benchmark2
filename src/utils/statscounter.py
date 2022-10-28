@@ -13,7 +13,6 @@ from time import time
 class StatsCounter(object):
 
     def __init__(self):
-
         self.args = ArgumentParser.get_instance().args
         self.my_rank = self.args.my_rank
         self.output_folder = self.args.output_folder
@@ -29,23 +28,27 @@ class StatsCounter(object):
         # Each process keeps track of its loading and processing times independently
         self.loading_times = {}
         self.processing_times = {}
+        self.load_and_proc_times = {}
 
     def start_epoch(self, epoch):
         if self.my_rank == 0:
             ts = utcnow()
             logging.info(f"{ts} Starting epoch {epoch}")
             self.per_epoch_stats[epoch] = {
-                'start': ts
+                'start': ts,
             }
         # Initialize dicts for the current epoch
         self.loading_times[epoch] = {}
         self.processing_times[epoch] = {}
+        self.load_and_proc_times[epoch] = {}
+        self.load_and_proc_times[epoch]['load'] = {}
+        self.load_and_proc_times[epoch]['proc'] = {}
 
     def end_epoch(self, epoch):
         if self.my_rank == 0:
             ts = utcnow()
             duration = pd.to_datetime(ts) - pd.to_datetime(self.per_epoch_stats[epoch]['start'])
-            duration = duration.total_seconds()
+            duration = '{:.2f}'.format(duration.total_seconds())
             self.per_epoch_stats[epoch]['end'] = ts
             self.per_epoch_stats[epoch]['duration'] = duration
             logging.info(f"{ts} Ending epoch {epoch} - {self.steps} steps completed in {duration} seconds")
@@ -57,14 +60,14 @@ class StatsCounter(object):
             self.per_epoch_stats[epoch]['eval'] = {
                 'start': ts
             }
-        self.loading_times[epoch]['eval'] = []
-        self.processing_times[epoch]['eval'] = []
+        self.load_and_proc_times[epoch]['load']['eval'] = []
+        self.load_and_proc_times[epoch]['proc']['eval'] = []
 
     def end_eval(self, epoch):
         if self.my_rank == 0:
             ts = utcnow()
             duration = pd.to_datetime(ts)- pd.to_datetime(self.per_epoch_stats[epoch]['eval']['start'])
-            duration = duration.total_seconds()
+            duration = '{:.2f}'.format(duration.total_seconds())
             logging.info(f"{ts} Ending eval - {self.steps_eval} steps completed in {duration} seconds")
 
             self.per_epoch_stats[epoch]['eval']['end'] = ts
@@ -82,7 +85,7 @@ class StatsCounter(object):
         if self.my_rank == 0:
             ts = utcnow()
             duration = pd.to_datetime(ts) - pd.to_datetime(self.per_epoch_stats[epoch][f'block{block}']['start'])
-            duration = duration.total_seconds()
+            duration = '{:.2f}'.format(duration.total_seconds())
             logging.info(f"{ts} Ending block {block} - {steps_taken} steps completed in {duration} seconds")
 
             self.per_epoch_stats[epoch][f'block{block}']['end'] = ts
@@ -100,7 +103,7 @@ class StatsCounter(object):
         if self.my_rank == 0:
             ts = utcnow()
             duration = pd.to_datetime(ts) - pd.to_datetime(self.per_epoch_stats[epoch][f'ckpt{block}']['start'])
-            duration = duration.total_seconds()
+            duration = '{:.2f}'.format(duration.total_seconds())
             logging.info(f"{ts} Ending checkpoint {block}")
 
             self.per_epoch_stats[epoch][f'ckpt{block}']['end'] = ts
@@ -109,32 +112,32 @@ class StatsCounter(object):
     def batch_loaded(self, epoch, block, t0):
         duration = time() - t0
         key = f'block{block}'
-        if key in self.loading_times[epoch]:
-            self.loading_times[epoch][key].append(duration)
+        if key in self.load_and_proc_times[epoch]['load']:
+            self.load_and_proc_times[epoch]['load'][key].append(duration)
         else:
-            self.loading_times[epoch][key] = [duration]
+            self.load_and_proc_times[epoch]['load'][key] = [duration]
         logging.debug(f"{utcnow()} Rank {self.my_rank} loaded {self.batch_size} samples in {duration} seconds")
 
 
     def batch_processed(self, epoch, block, t0):
         duration = time() - t0
         key = f'block{block}'
-        if key in self.processing_times[epoch]:
-            self.processing_times[epoch][key].append(duration)
+        if key in self.load_and_proc_times[epoch]['proc']:
+            self.load_and_proc_times[epoch]['proc'][key].append(duration)
         else:
-            self.processing_times[epoch][key] = [duration]
+            self.load_and_proc_times[epoch]['proc'][key] = [duration]
         logging.info(f"{utcnow()} Rank {self.my_rank} processed {self.batch_size} samples in {duration} seconds")
 
 
     def eval_batch_loaded(self, epoch, t0):
         duration = time() - t0
-        self.loading_times[epoch]['eval'].append(duration)
+        self.load_and_proc_times[epoch]['load']['eval'].append(duration)
         logging.debug(f"{utcnow()} Rank {self.my_rank} loaded {self.batch_size_eval} samples in {duration} seconds")
 
 
     def eval_batch_processed(self, epoch, t0):
         duration = time() - t0
-        self.processing_times[epoch]['eval'].append(duration)
+        self.load_and_proc_times[epoch]['proc']['eval'].append(duration)
         logging.info(f"{utcnow()} Rank {self.my_rank} processed {self.batch_size_eval} samples in {duration} seconds")
 
     def save_data(self):
@@ -144,8 +147,5 @@ class StatsCounter(object):
             with open(os.path.join(self.output_folder, 'per_epoch_stats.json'), 'w') as outfile:
                 json.dump(self.per_epoch_stats, outfile, indent=4)
 
-        with open(os.path.join(self.output_folder, f'{self.my_rank}_loading_times.json'), 'w') as outfile:
-            json.dump(self.loading_times, outfile, indent=4)
-
-        with open(os.path.join(self.output_folder, f'{self.my_rank}_processing_times.json'), 'w') as outfile:
-            json.dump(self.loading_times, outfile, indent=4)
+        with open(os.path.join(self.output_folder, f'{self.my_rank}_load_and_proc_times.json'), 'w') as outfile:
+            json.dump(self.load_and_proc_times, outfile, indent=4)
