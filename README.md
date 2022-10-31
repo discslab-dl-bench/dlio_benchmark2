@@ -67,26 +67,26 @@ A DLIO run is split in 3 phases:
 
 `start_dlio.sh` provides a convenient way to run these steps, by copying the given scripts to the container and running them within. This way, we don't have to rebuild the image evyer time we modify the scripts. The script will flush the caches on the host between data-generation and running the benchmark, as well as start `iostat` to gather device-level I/O information. 
 
-```bash
+```
 $ sudo ./start_dlio.sh --help
 Usage: ./start_dlio.sh [OPTIONS] -- [EXTRA ARGS]
-Convenience script to launch the DLIO benchmark.
+Convenience script to launch the DLIO benchmark and container.
 
-The given data-generation, run and post-processing scripts will be launched within the container, flushing the caches after data-generation.
+The given data-generation and run scripts will be launched within the container, flushing the caches between them.
 If no data-generation script is given, the data is assumed to have previously been generated in the data directory.
-If no run or post-processing scripts are given, an interactive session to the container will be started.
+If no run-script is given, an interactive session to the container will be started instead.
 
 Options:
   -h, --help                    Print this message.
-  -dd, --data-dir               Directory where the training data is read and generated. './data' by default.
-  -od, --output-dir             Output directory for log and checkpoint files. './output' by default.
-  -bd, --device                 An I/O device to trace, e.g. sda. Can be passed multiple times.
-  -im, --image-name             Name of the docker image from which to launch the container. Defaults to 'dlio:latest'.
-  -c, --container-name          Docker container name. Defaults to 'dlio'.
+  -dd, --data-dir               Directory where the training data is read and generated. ./data by default.
+  -od, --output-dir             Output directory for log and checkpoint files. ./output by default.
+  -bd, --device                 An I/O device to trace. Can be passed multiple times.
+  -im, --image-name             Name of the docker image to launch the container from. Defaults to 'dlio:latest'.
+  -c, --container-name          Name to give the docker container. Defaults to dlio.
   -dgs, --datagen-script        Script to generate the data for this run. If empty, data will be assumed to exist in data-dir.
   -rs, --run-script             Script used to launch DLIO within the container.
   -pps, --postproc-script       Post-Porcessing script to generate a report from the DLIO output.
-  -it, --interactive            Pass withouth a value. Launch an interactive session to the container. Default if no run or post-processing scripts are given.
+  -it, --interactive            Pass withouth a value. Will launch an interactive session to the container. Gets activated if no run-script or post-processing scripts are given.
 
 Extra args:
   Any extra arguments passed after after '--' will be passed as is to the DLIO launch script.
@@ -94,14 +94,13 @@ Extra args:
 
 We have included some scripts to emulate the MLCommons UNET3D and BERT workloads under `workloads/`.
 
-
 Note: Make sure to remove or rename the data-directory between runs of different workloads or else the run will fail.
 
 ## UNET3D
 
 To run the UNET3D simulation:
 ```
-sudo ./start_dlio.sh -im <image:tag> -dgs workloads/UNET3D_datagen.sh -rs workloads/UNET3D_runscript.sh -pps workloads/UNET3D_postproc.sh -bd <dev-to-trace>
+sudo ./start_dlio.sh -im <image:tag> -dgs workloads/UNET3D/datagen.sh -rs workloads/UNET3D/run.sh -pps workloads/UNET3D/postproc.sh -bd <dev-to-trace>
 ```
 
 You can include multiple `-bd` options to trace multiple devices.
@@ -110,7 +109,7 @@ You can include multiple `-bd` options to trace multiple devices.
 
 To run the BERT simulation:
 ```
-sudo ./start_dlio.sh -im <image:tag> -dgs workloads/BERT_datagen.sh -rs workloads/BERT_runscript.sh -pps workloads/BERT_postproc.sh -bd <dev-to-trace>
+sudo ./start_dlio.sh -im <image:tag> -dgs workloads/BERT/datagen.sh -rs workloads/BERT/run.sh -pps workloads/BERT/postproc.sh -bd <dev-to-trace>
 ```
 ## DLRM
 Work in progress.

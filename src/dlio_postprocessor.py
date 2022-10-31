@@ -7,7 +7,6 @@ import pandas as pd
 from src.utils.argument_parser import str2bool
 from statistics import mean, median, stdev, quantiles
 
-from utils.utility import utcnow
 
 
 class DLIOPostProcessor:
@@ -17,10 +16,6 @@ class DLIOPostProcessor:
         self.comm_size = args.num_proc
         self.epochs = args.epochs
         self.epochs_list = [str(e) for e in range(1, self.epochs + 1)]
-
-        print(self.epochs_list)
-
-        self.hours_offset = args.hours_offset
 
         self.do_eval = args.do_eval
         self.do_checkpoint = args.do_checkpoint
@@ -201,6 +196,16 @@ class DLIOPostProcessor:
         """
         Return a dictionary with various statistics of the given series
         """
+        if series is None or len(series) < 2:
+            return {
+                "mean": 'n/a',
+                "std": 'n/a',
+                "min": 'n/a',
+                "median": 'n/a',
+                "p90": 'n/a',
+                "p99": 'n/a',
+                "max": 'n/a'        
+            }
         # Returns 99 cut points
         # We can use inclusive because we have the entire population
         percentiles = quantiles(series, n=100, method='inclusive')
@@ -249,8 +254,8 @@ class DLIOPostProcessor:
                 disk_i += 1
 
         # Convert timestamp fields to datatime
-        cpu_stats.timestamp = pd.to_datetime(cpu_stats.timestamp) + pd.DateOffset(hours=self.hours_offset)
-        disk_stats.timestamp = pd.to_datetime(disk_stats.timestamp) + pd.DateOffset(hours=self.hours_offset)
+        cpu_stats.timestamp = pd.to_datetime(cpu_stats.timestamp)
+        disk_stats.timestamp = pd.to_datetime(disk_stats.timestamp)
         self.disk_stats = disk_stats
         self.disks = pd.unique(self.disk_stats['disk'])
         self.cpu_stats = cpu_stats
@@ -268,6 +273,8 @@ class DLIOPostProcessor:
         def addto_and_return_stats(addto, df, stat):
             data = df[stat].to_list()
             addto += data
+            if len(data) < 2:
+                logging.warning(f'Less than 2 data points for {stat}')
             return self.get_stats(data)
         
         r_overall_bandwidth = {}
@@ -296,11 +303,12 @@ class DLIOPostProcessor:
 
         for epoch in self.epochs_list:
 
-            logging.info(f"Extracting stats for epoch {epoch}")
 
             epoch_data = self.per_epoch_stats[epoch]
 
             for phase, phase_data in epoch_data.items():
+                logging.info(f"Extracting stats for epoch {epoch} {phase}")
+
                 if not isinstance(phase_data, dict):
                     continue
 
@@ -317,7 +325,8 @@ class DLIOPostProcessor:
                     disk_data = disk_io[disk_io['disk'] == disk]
 
                     for i, stat in enumerate(disk_stats_to_extract):
-                        print(stat)
+                        data = disk_data[stat].to_list()
+                        disk_accumulators[i][disk] += data
                         self.per_epoch_stats[epoch][phase]['disk'][disk][stat] = addto_and_return_stats(disk_accumulators[i][disk], disk_data, stat)
 
                 cpu_data = get_series_daterange(self.cpu_stats, start, end)
@@ -430,7 +439,8 @@ class DLIOPostProcessor:
         # Write the report
         with open(os.path.join(self.outdir, report_name), 'w') as outfile:
 
-            outfile.write("DLIO Report\n\n")
+            outfile.write("DLIO v1.0 Report\n\n")
+            outfile.write("Note: Training phases lasting less than 2 seconds, will show 'n/a' values, as there is not enough data to compute statistics.\n\n")
             outfile.write("Overall\n\n")
 
             overall_desc = {
@@ -439,7 +449,7 @@ class DLIOPostProcessor:
                 'Ended:': self.overall_stats['end'],
                 'Duration (s):': self.overall_stats['duration'],
                 'Num Ranks:': self.comm_size,
-                'Batch size:': self.batch_size,
+                'Batch size (per rank):': self.batch_size,
             }
 
             if self.do_eval:
@@ -496,7 +506,7 @@ class DLIOPostProcessor:
                     format_print(outfile, phase_desc, indent=2)
                     write_out_stats_table(outfile, phase_data, has_loading=has_loading, indent=2)
 
-        logging.info(f"Successfully wrote {os.path.join(self.outdir, 'DLIO_report.txt')}")
+        logging.info(f"Successfully wrote {os.path.join(self.outdir, report_name)}")
 
 
     def generate_report(self):
@@ -531,8 +541,6 @@ def main():
                         help="If checkpointing was simulated")
     parser.add_argument("-d", "--debug", default=False, type=str2bool,
                         help="Print out more logging")
-    parser.add_argument("-ho", "--hours-offset", default=0, type=int,
-                        help="Number of hours to add to the iostat trace times to transform to UTC.")
     parser.add_argument("-n", "--name", default="", type=str,
                         help="Name of the run")
 

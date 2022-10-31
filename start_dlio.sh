@@ -64,6 +64,8 @@ main() {
 
 	mkdir -p $DATA_DIR
 	mkdir -p $OUTPUT_DIR
+	chmod -R a+rw $DATA_DIR
+	chmod -R a+rw $OUTPUT_DIR
 
 	# Remove existing container from a previous run (docker won't let you use the same name otherwise).
 	if [ ! -z $CONTAINER_NAME ]
