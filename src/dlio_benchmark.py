@@ -84,6 +84,7 @@ class DLIOBenchmark(object):
         self.data_generator = None
         self.num_files_train = self.arg_parser.args.num_files_train
         self.num_samples = self.arg_parser.args.num_samples
+        self.total_training_steps = self.arg_parser.args.total_training_steps
         
         self.epochs = self.arg_parser.args.epochs
         self.batch_size = self.arg_parser.args.batch_size
@@ -96,9 +97,9 @@ class DLIOBenchmark(object):
             self.data_generator = GeneratorFactory.get_generator(self.arg_parser.args.format)
 
         # Checkpointing support
-        self.do_checkpoint = self.arg_parser.args.checkpoint
-        self.checkpoint_every_steps = self.arg_parser.args.checkpoint_every_steps
-        self.checkpoint_every_epochs = self.arg_parser.args.checkpoint_every_epochs
+        self.do_checkpoint = self.arg_parser.args.do_checkpoint
+        self.steps_between_checkpoints = self.arg_parser.args.steps_between_checkpoints
+        self.epochs_between_checkpoints = self.arg_parser.args.epochs_between_checkpoints
         self.checkpoint_after_epoch = self.arg_parser.args.checkpoint_after_epoch
         
         # Evaluation support
@@ -108,8 +109,8 @@ class DLIOBenchmark(object):
         self.batch_size_eval = self.arg_parser.args.batch_size_eval
         self.eval_time = self.arg_parser.args.eval_time
         self.eval_after_epoch = self.arg_parser.args.eval_after_epoch
-        self.eval_every_epoch = self.arg_parser.args.eval_every_epoch
-        
+        self.epochs_between_evals = self.arg_parser.args.epochs_between_evals
+
         # Hold various lists/dicts for statistics
         self.time_to_load_train_batch = []
         self.time_to_process_train_batch = []
@@ -158,15 +159,11 @@ class DLIOBenchmark(object):
         t0 = time() 
         for batch in self.framework.get_reader().next():
             self.stats.eval_batch_loaded(epoch, t0)
-            # logging.info(f"{utcnow()} Rank {self.my_rank} loaded {self.batch_size_eval} samples in {time() - t1} seconds")
-            # self.time_to_load_eval_batch.append([utcnow(), epoch_number, time() - t1])
 
             if self.eval_time > 0:
                 self.framework.compute(epoch, step, self.eval_time)
 
             self.stats.eval_batch_processed(epoch, t0)
-            # self.time_to_process_eval_batch.append([utcnow(), epoch_number, time() - t1])
-            # logging.info(f"{utcnow()} Rank {self.my_rank} processed {self.batch_size_eval} samples in {time() - t1} seconds")
 
             step += 1
             if step > total:
@@ -193,8 +190,6 @@ class DLIOBenchmark(object):
         for batch in self.framework.get_reader().next():
             self.stats.batch_loaded(epoch, block, t0)
             
-            # self.time_to_load_train_batch.append([utcnow(), epoch, time() - t0])
-
             # Log a new block, unless it's the first one which we've already logged before the loop
             if block_step == 1 and block != 1:
                 self.stats.start_block(epoch, block)
@@ -208,25 +203,28 @@ class DLIOBenchmark(object):
             block_step += 1
             overall_step += 1
 
-            if overall_step > max_steps:
+            if overall_step >= max_steps or overall_step == self.total_training_steps:
                 self.framework.barrier()
-                self.stats.end_block(epoch, block, block_step - 1)
-                return overall_step - 1
+                self.stats.end_block(epoch, block, block_step)
+                return overall_step
 
-            if self.do_checkpoint and epoch % self.next_checkpoint_at_epoch and overall_step % self.checkpoint_every_steps == 0:
-                self.stats.end_block(epoch, block, block_step - 1)
-                self.stats.start_ckpt(epoch, block, overall_step - 1)
-                self.framework.checkpoint(overall_step - 1)
-                self.stats.end_ckpt(epoch, block, overall_step - 1)
+            if self.do_checkpoint and epoch == self.next_checkpoint_epoch and overall_step == self.next_checkpoint_step:
+                self.stats.end_block(epoch, block, block_step)
+                self.stats.start_ckpt(epoch, block, overall_step)
+                self.framework.checkpoint(overall_step)
+                self.stats.end_ckpt(epoch, block)
                 self.framework.barrier()
                 block += 1
                 # Reset the number of steps after every checkpoint to mark the start of a new block
                 block_step = 1
-                self.next_checkpoint_at_epoch += self.checkpoint_every_epoch
+                self.next_checkpoint_step += self.steps_between_checkpoints
 
             t0 = time()
+        
+        # In case the block was not closed
+        self.stats.end_block(epoch, block, overall_step)
 
-        return overall_step - 1
+        return overall_step
 
     
     def run(self):
@@ -245,26 +243,28 @@ class DLIOBenchmark(object):
                     logging.info(f"{utcnow()} Steps per eval: {total} = {self.num_samples} * {self.num_files_eval} / {self.batch_size_eval} / {self.comm_size} (samples per file * num files / batch size eval / comm size)")
             
             # Keep track of the next epoch at which we will evaluate
-            next_eval_at = self.eval_after_epoch
-            self.next_checkpoint_at_epoch = self.checkpoint_after_epoch
-            for epoch in range(1, self.epochs + 1):
+            next_eval_epoch = self.eval_after_epoch
+            self.next_checkpoint_epoch = self.checkpoint_after_epoch
+            self.next_checkpoint_step = self.steps_between_checkpoints
 
+            for epoch in range(1, self.epochs + 1):
                 self.stats.start_epoch(epoch)
 
                 # Initialize the dataset
                 self.framework.get_reader().read(epoch, do_eval=False)
                 self.framework.barrier()
-                # self.stats.end_init(epoch)
 
                 self._train(epoch)
                 self.stats.end_epoch(epoch)
+
+                self.next_checkpoint_epoch += self.epochs_between_checkpoints
 
                 self.framework.barrier()
                 self.framework.get_reader().finalize()
 
                 # Perform evaluation if enabled
-                if self.do_eval and epoch == next_eval_at:
-                    next_eval_at += self.eval_every_epoch
+                if self.do_eval and epoch == next_eval_epoch:
+                    next_eval_epoch += self.epochs_between_evals
 
                     self.stats.start_eval(epoch)
                 
@@ -305,7 +305,7 @@ class DLIOBenchmark(object):
                         shutil.rmtree(self.arg_parser.args.data_folder)
                         logging.info(f"{utcnow()} Deleted data files")
             
-            # Dump collected stats
+            # Save collected stats to disk
             self.stats.save_data()
 
         self.framework.barrier()

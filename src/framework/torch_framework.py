@@ -86,8 +86,8 @@ class TorchFramework(Framework):
             """
             if not os.path.exists(self.output_folder):
                 os.makedirs(self.output_folder)
-
-            model_file = os.path.join(self.output_folder, f"model_{step_number}_{self.args.my_rank}.bin")
+            my_rank = self.rank()
+            model_file = os.path.join(self.output_folder, f"model_{step_number}_{my_rank}.bin")
 
             f = open(model_file, "w")
             string_val = "x" * self.args.model_size 

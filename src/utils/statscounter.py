@@ -51,7 +51,7 @@ class StatsCounter(object):
             duration = '{:.2f}'.format(duration.total_seconds())
             self.per_epoch_stats[epoch]['end'] = ts
             self.per_epoch_stats[epoch]['duration'] = duration
-            logging.info(f"{ts} Ending epoch {epoch} - {self.steps} steps completed in {duration} seconds")
+            logging.info(f"{ts} Ending epoch {epoch} - {self.steps} steps completed in {duration} s")
 
     def start_eval(self, epoch):
         if self.my_rank == 0:
@@ -68,7 +68,7 @@ class StatsCounter(object):
             ts = utcnow()
             duration = pd.to_datetime(ts)- pd.to_datetime(self.per_epoch_stats[epoch]['eval']['start'])
             duration = '{:.2f}'.format(duration.total_seconds())
-            logging.info(f"{ts} Ending eval - {self.steps_eval} steps completed in {duration} seconds")
+            logging.info(f"{ts} Ending eval - {self.steps_eval} steps completed in {duration} s")
 
             self.per_epoch_stats[epoch]['eval']['end'] = ts
             self.per_epoch_stats[epoch]['eval']['duration'] = duration        
@@ -83,10 +83,15 @@ class StatsCounter(object):
 
     def end_block(self, epoch, block, steps_taken):
         if self.my_rank == 0:
+            # Block was possibly already ended. Need this to end blocks
+            # still ongoing when data loader runs out of batches and
+            # does not take one of the expected exits from the batch reading loop
+            if 'end' in self.per_epoch_stats[epoch][f'block{block}']:
+                return
             ts = utcnow()
             duration = pd.to_datetime(ts) - pd.to_datetime(self.per_epoch_stats[epoch][f'block{block}']['start'])
             duration = '{:.2f}'.format(duration.total_seconds())
-            logging.info(f"{ts} Ending block {block} - {steps_taken} steps completed in {duration} seconds")
+            logging.info(f"{ts} Ending block {block} - {steps_taken} steps completed in {duration} s")
 
             self.per_epoch_stats[epoch][f'block{block}']['end'] = ts
             self.per_epoch_stats[epoch][f'block{block}']['duration'] = duration
@@ -116,7 +121,7 @@ class StatsCounter(object):
             self.load_and_proc_times[epoch]['load'][key].append(duration)
         else:
             self.load_and_proc_times[epoch]['load'][key] = [duration]
-        logging.debug(f"{utcnow()} Rank {self.my_rank} loaded {self.batch_size} samples in {duration} seconds")
+        logging.debug(f"{utcnow()} Rank {self.my_rank} loaded {self.batch_size} samples in {duration} s")
 
 
     def batch_processed(self, epoch, block, t0):
@@ -126,19 +131,19 @@ class StatsCounter(object):
             self.load_and_proc_times[epoch]['proc'][key].append(duration)
         else:
             self.load_and_proc_times[epoch]['proc'][key] = [duration]
-        logging.info(f"{utcnow()} Rank {self.my_rank} processed {self.batch_size} samples in {duration} seconds")
+        logging.info(f"{utcnow()} Rank {self.my_rank} processed {self.batch_size} samples in {duration} s")
 
 
     def eval_batch_loaded(self, epoch, t0):
         duration = time() - t0
         self.load_and_proc_times[epoch]['load']['eval'].append(duration)
-        logging.debug(f"{utcnow()} Rank {self.my_rank} loaded {self.batch_size_eval} samples in {duration} seconds")
+        logging.debug(f"{utcnow()} Rank {self.my_rank} loaded {self.batch_size_eval} samples in {duration} s")
 
 
     def eval_batch_processed(self, epoch, t0):
         duration = time() - t0
         self.load_and_proc_times[epoch]['proc']['eval'].append(duration)
-        logging.info(f"{utcnow()} Rank {self.my_rank} processed {self.batch_size_eval} samples in {duration} seconds")
+        logging.info(f"{utcnow()} Rank {self.my_rank} processed {self.batch_size_eval} samples in {duration} s")
 
     def save_data(self):
         # Dump statistic counters to files for postprocessing
