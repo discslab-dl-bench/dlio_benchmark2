@@ -93,9 +93,14 @@ Extra args:
 ```
 
 We have included some scripts to emulate the MLCommons UNET3D and BERT workloads under `workloads/`.
+<<<<<<< HEAD
 The simulated compute times for each of these workloads was measured on a DGX-1 A100 system, and will have to be changed to simulate the behaviour of other systems. 
 
 Make sure to remove or rename the data-directory between runs of different workloads or else the run will fail.
+=======
+
+Note: Make sure to remove or rename the data-directory between runs of different workloads or else the run will fail.
+>>>>>>> db448d44395ef20da952078351af321507ebe4c9
 
 ## UNET3D
 
