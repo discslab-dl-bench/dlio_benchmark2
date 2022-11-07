@@ -1,3 +1,19 @@
+"""
+   Copyright 2021 UChicago Argonne, LLC
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+"""
+
 from src.common.error_code import ErrorCodes
 from src.common.enumerations import FormatType, FrameworkType
 from src.framework.framework import Framework, DummyTraceObject
@@ -13,7 +29,6 @@ from time import sleep
 import horovod.torch as hvd
 
 from src.reader.reader_factory import ReaderFactory
-from utils.argument_parser import ArgumentParser
 
 hvd.init()
 
@@ -42,10 +57,8 @@ class TorchFramework(Framework):
         self.profiling = profiling
         self.reader_handler = None
 
-    def init_reader(self, format_type):
-        if format_type == FormatType.TFRECORD:
-            raise Exception(str(ErrorCodes.EC1001))
-        self.reader_handler = ReaderFactory.get_format(format_type)
+    def init_reader(self, format_type, data_loader=None):
+        self.reader_handler = ReaderFactory.get_reader(format_type, data_loader=data_loader)
 
     def get_type(self):
         return FrameworkType.PYTORCH

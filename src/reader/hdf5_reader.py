@@ -31,7 +31,7 @@ class HDF5Reader(FormatReader):
     def __init__(self):
         super().__init__()
 
-    def read(self, epoch_number):
+    def read(self, epoch_number, do_eval=False):
         """
         Reading the hdf5 dataset. Here we take just take the filename and they are open during iteration
         :param epoch_number: epoch number for training loop

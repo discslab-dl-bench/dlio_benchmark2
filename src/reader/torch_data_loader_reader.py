@@ -1,14 +1,17 @@
 """
- Copyright (C) 2020  Argonne, Hariharan Devarajan <hdevarajan@anl.gov>
- This file is part of DLProfile
- DLIO is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as
- published by the Free Software Foundation, either version 3 of the published by the Free Software Foundation, either
- version 3 of the License, or (at your option) any later version.
- This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
- warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
- details.
- You should have received a copy of the GNU General Public License along with this program.
- If not, see <http://www.gnu.org/licenses/>.
+   Copyright 2021 UChicago Argonne, LLC
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
 """
 import math
 import logging
@@ -20,37 +23,64 @@ from src.utils.utility import utcnow
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-from src.common.enumerations import Shuffle
+from src.common.enumerations import Shuffle, FormatType
 from src.reader.reader_handler import FormatReader
 
-class DataLoaderReader(FormatReader):
-    """
-    DataLoader reader and iterator logic.
-    PyTorch data loader is file format agnostic so it is not technically separate from the other formats
-    For now we will assume we are reading .npz files through the dataloader
-    """
-    class NpzDataset(Dataset):
+from torchvision.io import read_image, decode_png, decode_jpeg, read_file
+
+### reading file of different formats. 
+def read_jpeg(filename):
+    return read_image(filename)
+
+def read_png(filename):
+    return read_image(filename)
+
+def read_npz(filename):
+    return np.load(filename)
+
+def read_hdf5(f):
+    file_h5 = h5py.File(file, 'r')
+    d = file_h5['x']
+    return d
+
+filereader={
+    FormatType.JPEG: read_jpeg, 
+    FormatType.PNG: read_png, 
+    FormatType.NPZ: read_npz, 
+    FormatType.HDF5: read_hdf5, 
+}
+
+class TorchDataset(Dataset):
         """
-        Only support a single list of files for now 
-        Could be extended to support different X and Y files, like in imseg
-        TODO: Move the Dataset somewhere else and support other file formats.
+        Currently, we only support loading one sample per file 
+        TODO: support multiple samples per file
         """
-        def __init__(self, samples, rank):
+        def __init__(self, samples, rank, format):
             self.samples = samples
             self.my_rank = rank
-
+            try:
+                self.read = filereader[format]
+            except:
+                print(f"Unsupported file reader for {format}. Reading the byte contents instead")
+                self.read = read_file
+            
         def __len__(self):
             return len(self.samples)
 
         def __getitem__(self, idx):
             logging.debug(f"{utcnow()} Rank {self.my_rank} reading {self.samples[idx]}")
-            return np.load(self.samples[idx])
+            return self.read(self.samples[idx])
 
+class TorchDataLoaderReader(FormatReader):
+    """
+    DataLoader reader and iterator logic.
+    """
 
     def __init__(self):
         super().__init__()
-        self.read_threads = self._arg_parser.args.read_threads
-        self.computation_threads = self._arg_parser.args.computation_threads
+        self.read_threads = self._args.read_threads
+        self.computation_threads = self._args.computation_threads
+        self.format = self._args.format
 
     def read(self, epoch_number, do_eval=False):
         # superclass function initializes the file list
@@ -58,7 +88,7 @@ class DataLoaderReader(FormatReader):
 
         do_shuffle = True if self.memory_shuffle != Shuffle.OFF else False
 
-        dataset = self.NpzDataset(self._local_file_list, self.my_rank)
+        dataset = TorchDataset(self._local_file_list, self.my_rank, self.format)
 
         # TODO: In image segmentation, the distributed sampler is not used during eval, we could parametrize this away if needed
         # This handles the partitioning between ranks

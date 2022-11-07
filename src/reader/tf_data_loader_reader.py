@@ -18,12 +18,12 @@ import logging
 from time import time
 
 from src.utils.utility import utcnow
-from src.common.enumerations import Shuffle
+from src.common.enumerations import Shuffle, FormatType
 from src.reader.reader_handler import FormatReader
 import tensorflow as tf
+import numpy as np
 
-
-class TFReader(FormatReader):
+class TFDataLoaderReader(FormatReader):
     """
     Reader for TFRecord files.
     """
@@ -31,33 +31,31 @@ class TFReader(FormatReader):
         super().__init__()
         self.read_threads = self._args.read_threads
         self.computation_threads = self._args.computation_threads
-
+        self.format = self._args.format
     # TODO: DLIO assumes the tfrecord files to contain image/label pairs.
     # This is not always the case, e.g. in BERT, each record is more complex,
     # consisting of 6 lists and a label. Same for DLRM. 
-    def _tf_parse_function(self, serialized):
+    @tf.function
+    def _tf_parse_function(self, filename):
         """
         performs deserialization of the tfrecord.
         :param serialized: is the serialized version using protobuf
         :return: deserialized image and label.
         """
-        features = \
-            {
-                'image': tf.io.FixedLenFeature([], tf.string),
-                'label': tf.io.FixedLenFeature([], tf.int64)
-            }
-        # Parse the serialized data so we get a dict with our data.
-        parsed_example = tf.io.parse_single_example(serialized=serialized,
-                                                    features=features)
-        # Get the image as raw bytes.
-        dimention = int(math.sqrt(self.record_size))
-        image_shape = tf.stack([dimention, dimention, 1])
-        image_raw = parsed_example['image']
-        label = tf.cast(parsed_example['label'], tf.float32)
-        # Decode the raw bytes so it becomes a tensor with type.
-        image = tf.io.decode_raw(image_raw, tf.uint8)
-        d = image, label
-        return d
+        if self.format==FormatType.NPZ:
+            x = tf.io.read_file(filename)
+            return x
+        elif self.format==FormatType.JPEG:
+            img = tf.io.read_file(filename)
+            img = tf.image.decode_jpeg(img, channels=3)
+            return img
+        elif self.format==FormatType.PNG:
+            img = tf.io.read_file(filename)
+            img = tf.image.decode_png(img, channels=3)
+            return img
+        else:
+            print("Reading %f format using Tensorflow Data Loader is not implemented, reading as bytes contents directly" %self.format)
+            return tf.io.read_file(filename)
 
     def read(self, epoch_number, do_eval=False):
         """
@@ -68,12 +66,9 @@ class TFReader(FormatReader):
         """
         # superclass function initializes the file list
         super().read(epoch_number, do_eval)
-
-        dataset = tf.data.TFRecordDataset(filenames=self._local_file_list,
-                                          buffer_size=self.transfer_size,
-                                          num_parallel_reads=self.read_threads)
-
-        dataset = dataset.map(self._tf_parse_function, num_parallel_calls=self.computation_threads)
+        dataset = tf.data.Dataset.from_tensor_slices(self._file_list)
+        dataset = dataset.shard(num_shards=self.comm_size, index=self.my_rank)
+        dataset = dataset.map(self._tf_parse_function, num_parallel_calls=self.read_threads)
 
         if self.memory_shuffle != Shuffle.OFF:
             if self.memory_shuffle != Shuffle.SEED:
