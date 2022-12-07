@@ -1,5 +1,6 @@
 """
-   Copyright 2021 UChicago Argonne, LLC
+   Copyright © 2022, UChicago Argonne, LLC
+   All Rights Reserved
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -13,31 +14,35 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 """
-from time import time
-
-from src.common.enumerations import Profiler, DatasetType
-from src.data_generator.generator_factory import GeneratorFactory
-from src.framework.framework_factory import FrameworkFactory
-from src.profiler.profiler_factory import ProfilerFactory
-from src.utils.utility import utcnow
-from src.utils.statscounter import StatsCounter
-from src.utils.config import LoadConfig, ConfigArguments
-
-import math
 import os
+import math
+import hydra
 import shutil
 import logging
 import pandas as pd
+from time import time
 
-import hydra
-from omegaconf import DictConfig, OmegaConf
-from hydra.core.config_store import ConfigStore
-from dataclasses import dataclass
-# Remove (some) TF and CUDA logging
+# Reduce TF and CUDA logging
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['AUTOGRAPH_VERBOSITY'] = '0'
 import tensorflow as tf
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+
+# Remove PyTorch warning when libtorch_cuda_cu.so isn't found
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
+from dataclasses import dataclass
+from src.utils.utility import utcnow
+from omegaconf import DictConfig, OmegaConf
+from src.utils.statscounter import StatsCounter
+from hydra.core.config_store import ConfigStore
+from src.utils.config import LoadConfig, ConfigArguments
+from src.common.enumerations import Profiler, DatasetType
+from src.profiler.profiler_factory import ProfilerFactory
+from src.framework.framework_factory import FrameworkFactory
+from src.data_generator.generator_factory import GeneratorFactory
+
 
 class DLIOBenchmark(object):
     """
@@ -55,11 +60,20 @@ class DLIOBenchmark(object):
         </ul>
         """
         self.args = ConfigArguments.get_instance()
-    
+        
+
         LoadConfig(self.args, cfg)
-        hydra_cfg = hydra.core.hydra_config.HydraConfig.get()
-        self.args.output_folder = hydra_cfg['runtime']['output_dir']
-        self.logdir = self.args.logdir
+        self.args.validate()
+        try:
+            hydra_cfg = hydra.core.hydra_config.HydraConfig.get()
+            self.args.output_folder = hydra_cfg['runtime']['output_dir']
+        except:
+            self.args.output_folder = 'output/'
+
+        self.output_folder = self.args.output_folder
+        
+        self.logfile = os.path.join(self.output_folder, self.args.log_file)
+
         self.data_folder = self.args.data_folder
         self.output_folder = self.args.output_folder
         os.makedirs(self.output_folder, exist_ok=True)
@@ -70,14 +84,13 @@ class DLIOBenchmark(object):
 
         self.my_rank = self.args.my_rank = self.framework.rank()
         self.comm_size = self.args.comm_size = self.framework.size()
-        self.framework.init_reader(self.args.format, self.args.data_loader)
-        self.logfile = os.path.join(self.output_folder, self.args.log_file)
+
 
         # Delete previous logfile
         if self.my_rank == 0:
             if os.path.isfile(self.logfile):
                 os.remove(self.logfile)
-
+        self.framework.barrier()
         # Configure the logging library
         log_level = logging.DEBUG if self.args.debug else logging.INFO
         logging.basicConfig(
@@ -86,10 +99,17 @@ class DLIOBenchmark(object):
                 logging.FileHandler(self.logfile, mode = "a", encoding='utf-8'),
                 logging.StreamHandler()
             ],
-            format='%(message)s [%(pathname)s:%(lineno)d]'  # logging's max timestamp resolution is msecs, we will pass in usecs in the message
+            format='[%(levelname)s] %(message)s [%(pathname)s:%(lineno)d]'  # logging's max timestamp resolution is msecs, we will pass in usecs in the message
         )
-        logging.info(f"{utcnow()} Running DLIO with {self.comm_size} processes")
-        
+ 
+
+        if self.args.my_rank==0:
+            logging.info(f"{utcnow()} Running DLIO with {self.args.comm_size} process(es)")
+            try:
+                logging.info(f"{utcnow()} Reading YAML config file './configs/workload/{hydra_cfg.runtime.choices.workload}.yaml'" )
+            except:
+                pass
+
         self.generate_only = self.args.generate_only
         self.do_profiling = self.args.do_profiling
 
@@ -145,21 +165,26 @@ class DLIOBenchmark(object):
         - It generates the required data
         - Start profiling session for Darshan and Tensorboard.
         """
-        if self.args.debug and self.args.my_rank == 0:
-            input("Press enter to start\n")
         self.framework.barrier()
-        if self.args.generate_data:
-            logging.info(f"{utcnow()} Starting data generation")
-            self.data_generator.generate()
-            logging.info(f"{utcnow()} Generation done")
+        if self.args.debug and self.args.my_rank == 0:
+            input("Debug mode: Press enter to start\n")
 
-        if self.do_profiling:
+        if self.args.generate_data:
+            if self.args.my_rank==0:
+                logging.info(f"{utcnow()} Starting data generation")
+            self.data_generator.generate()
+            # important to have this barrier to ensure that the data generation is done for all the ranks
+            self.framework.barrier()
+            if self.args.my_rank==0:
+                logging.info(f"{utcnow()} Generation done")
+
+        if not self.generate_only and self.do_profiling:
             self.profiler.start()
             self.framework.start_framework_profiler()
             self.framework.barrier()
             if self.args.my_rank == 0:
-                logging.info(f"{utcnow()} Profiling Started")\
-
+                logging.info(f"{utcnow()} Profiling Started with {self.args.profiler}")
+        self.framework.init_reader(self.args.format, self.args.data_loader)
         self.framework.barrier()
 
     def _eval(self, epoch):
@@ -167,15 +192,15 @@ class DLIOBenchmark(object):
         Evaluation loop will read a separate dataset and has its own own computation time.
         """
         step = 1
-        total = math.ceil(self.num_samples * self.num_files_eval / self.batch_size_eval / self.comm_size)
+        total = math.floor(self.num_samples * self.num_files_eval / self.batch_size_eval / self.comm_size)
         t0 = time() 
         for batch in self.framework.get_reader(DatasetType.VALID).next():
-            self.stats.eval_batch_loaded(epoch, t0)
+            self.stats.eval_batch_loaded(epoch, step, t0)
 
             if self.eval_time > 0:
                 self.framework.compute(epoch, step, self.eval_time)
 
-            self.stats.eval_batch_processed(epoch, t0)
+            self.stats.eval_batch_processed(epoch, step, t0)
 
             step += 1
             if step > total:
@@ -193,15 +218,14 @@ class DLIOBenchmark(object):
         """
         block = 1   # A continuous period of training steps, ended by checkpointing
         block_step = overall_step = 1   # Steps are taken within blocks
-        max_steps = math.ceil(self.num_samples * self.num_files_train / self.batch_size / self.comm_size)
+        max_steps = math.floor(self.num_samples * self.num_files_train / self.batch_size / self.comm_size)
 
         # Start the very first block
         self.stats.start_block(epoch, block)
-
         t0 = time()
         for batch in self.framework.get_reader(dataset_type=DatasetType.TRAIN).next():
-            self.stats.batch_loaded(epoch, block, t0)
-            
+            self.stats.batch_loaded(epoch, overall_step, block, t0)
+            self.framework.barrier()
             # Log a new block, unless it's the first one which we've already logged before the loop
             if block_step == 1 and block != 1:
                 self.stats.start_block(epoch, block)
@@ -210,32 +234,41 @@ class DLIOBenchmark(object):
                 self.framework.compute(epoch, block_step, self.computation_time)
             self.framework.barrier()
 
-            self.stats.batch_processed(epoch, block, t0)
+            self.stats.batch_processed(epoch, overall_step, block, t0)
 
-            block_step += 1
-            overall_step += 1
 
-            if overall_step >= max_steps or overall_step == self.total_training_steps:
-                self.framework.barrier()
-                self.stats.end_block(epoch, block, block_step)
-                return overall_step
-
-            if self.do_checkpoint and epoch == self.next_checkpoint_epoch and overall_step == self.next_checkpoint_step:
+            if self.do_checkpoint and (self.steps_between_checkpoints>=0) and overall_step == self.next_checkpoint_step:
                 self.stats.end_block(epoch, block, block_step)
                 self.stats.start_ckpt(epoch, block, overall_step)
-                self.framework.checkpoint(overall_step)
+                self.framework.checkpoint(epoch, overall_step)
                 self.stats.end_ckpt(epoch, block)
                 self.framework.barrier()
                 block += 1
                 # Reset the number of steps after every checkpoint to mark the start of a new block
                 block_step = 1
                 self.next_checkpoint_step += self.steps_between_checkpoints
+            else:
+                block_step += 1
 
+            if overall_step >= max_steps or overall_step == self.total_training_steps:
+                self.framework.barrier()
+                if self.args.my_rank==0:
+                    logging.info(f"{utcnow()} Maximum number of steps reached")
+                if (block_step!=1 and self.do_checkpoint) or (not self.do_checkpoint):
+                    self.stats.end_block(epoch, block, block_step-1)
+                break
+                
+            overall_step += 1
             t0 = time()
-        
-        # In case the block was not closed
-        self.stats.end_block(epoch, block, overall_step)
 
+
+        if self.do_checkpoint and (self.steps_between_checkpoints < 0) and (epoch == self.next_checkpoint_epoch):
+            self.stats.end_block(epoch, block, block_step)
+            self.stats.start_ckpt(epoch, block, overall_step)
+            self.framework.checkpoint(epoch, overall_step)
+            self.stats.end_ckpt(epoch, block)
+            self.framework.barrier()
+            self.next_checkpoint_epoch += self.epochs_between_checkpoints
         return overall_step
 
     
@@ -248,28 +281,30 @@ class DLIOBenchmark(object):
         if not self.generate_only:
             # Print out the expected number of steps for each epoch and evaluation
             if self.my_rank == 0:
-                total = math.ceil(self.num_samples * self.num_files_train / self.batch_size / self.comm_size)
-                logging.info(f"{utcnow()} Steps per epoch: {total} = {self.num_samples} * {self.num_files_train} / {self.batch_size} / {self.comm_size} (samples per file * num files / batch size / comm size)")
+                total = math.floor(self.num_samples * self.num_files_train / self.batch_size / self.comm_size)
+                logging.info(f"{utcnow()} Max steps per epoch: {total} = {self.num_samples} * {self.num_files_train} / {self.batch_size} / {self.comm_size} (samples per file * num files / batch size / comm size)")
+
                 if self.do_eval:
-                    total = math.ceil(self.num_samples * self.num_files_eval / self.batch_size_eval / self.comm_size)
+                    total = math.floor(self.num_samples * self.num_files_eval / self.batch_size_eval / self.comm_size)
                     logging.info(f"{utcnow()} Steps per eval: {total} = {self.num_samples} * {self.num_files_eval} / {self.batch_size_eval} / {self.comm_size} (samples per file * num files / batch size eval / comm size)")
             
             # Keep track of the next epoch at which we will evaluate
             next_eval_epoch = self.eval_after_epoch
             self.next_checkpoint_epoch = self.checkpoint_after_epoch
-            self.next_checkpoint_step = self.steps_between_checkpoints
 
             for epoch in range(1, self.epochs + 1):
+                self.next_checkpoint_step = self.steps_between_checkpoints                
                 self.stats.start_epoch(epoch)
 
                 # Initialize the dataset
                 self.framework.get_reader(dataset_type=DatasetType.TRAIN).read(epoch)
                 self.framework.barrier()
 
-                self._train(epoch)
-                self.stats.end_epoch(epoch)
+                steps = self._train(epoch)
+                self.stats.end_epoch(epoch, steps)
+                logging.debug(f"{utcnow()} Rank {self.my_rank} returned after {steps} steps.")
 
-                self.next_checkpoint_epoch += self.epochs_between_checkpoints
+
 
                 self.framework.barrier()
                 self.framework.get_reader(DatasetType.TRAIN).finalize()
@@ -290,13 +325,6 @@ class DLIOBenchmark(object):
                     self.framework.barrier()
                     self.framework.get_reader(DatasetType.VALID).finalize()
 
-    def save(self, df_like, name):
-        """
-        Helper function to save a dataframe-like to a csv.
-        """
-        df = pd.DataFrame(df_like)
-        df.to_csv(os.path.join(self.output_folder, name), header=False, index=False)
-
     def finalize(self):
         """
         It finalizes the dataset once training is completed.
@@ -308,7 +336,7 @@ class DLIOBenchmark(object):
                 self.framework.stop_framework_profiler()
                 self.framework.barrier()
                 if self.my_rank == 0:
-                    logging.info(f"{utcnow()} profiling stopped")
+                    logging.info(f"{utcnow()} Profiling stopped")
             if not self.args.keep_files:
                 logging.info(f"{utcnow()} Keep files set to False. Deleting dataset")
                 self.framework.barrier()
@@ -319,7 +347,8 @@ class DLIOBenchmark(object):
             
             # Save collected stats to disk
             self.stats.save_data()
-
+        if self.my_rank==0:
+            logging.info(f"{utcnow()} Saved outputs in {self.output_folder}")
         self.framework.barrier()
 
 

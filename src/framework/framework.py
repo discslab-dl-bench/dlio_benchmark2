@@ -1,5 +1,6 @@
 """
-   Copyright 2021 UChicago Argonne, LLC
+   Copyright © 2022, UChicago Argonne, LLC
+   All Rights Reserved
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -21,6 +22,9 @@ from time import sleep
 import os
 import logging
 
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+
 from src.utils.config import ConfigArguments
 
 class DummyTraceObject(object):
@@ -38,6 +42,7 @@ class Framework(ABC):
     def __init__(self):
         self.args = ConfigArguments.get_instance()
         self.output_folder = self.args.output_folder
+        self.checkpoint_folder = self.args.checkpoint_folder
         pass
 
     @abstractmethod
@@ -48,17 +53,14 @@ class Framework(ABC):
     def get_type(self):
         pass
     
-    @abstractmethod
     def barrier(self):
-        pass
+        return comm.Barrier()
 
-    @abstractmethod
     def rank(self):
-        pass
+        return comm.rank
 
-    @abstractmethod
     def size(self):
-        pass
+        return comm.size
 
     @abstractmethod
     def start_framework_profiler(self):
@@ -72,7 +74,7 @@ class Framework(ABC):
     def trace_object(self, string, step, r):
         pass
 
-    def checkpoint(self, step_number):
+    def checkpoint(self, epoch, step_number):
         pass
 
     def model(epoch, epoch_number, step, computation_time):

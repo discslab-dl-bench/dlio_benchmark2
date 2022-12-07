@@ -1,5 +1,6 @@
 """
-   Copyright 2021 UChicago Argonne, LLC
+   Copyright © 2022, UChicago Argonne, LLC
+   All Rights Reserved
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -22,6 +23,9 @@ import os
 from mpi4py import MPI
 from shutil import copyfile
 import numpy as np
+import logging
+from src.utils.utility import utcnow
+
 
 class DataGenerator(ABC):
 
@@ -55,8 +59,13 @@ class DataGenerator(ABC):
                 for i in range(self.num_subfolders_train):
                     os.makedirs(self.data_dir + "/train/%d"%i, exist_ok=True)
             if self.num_subfolders_eval > 1: 
-                for i in range(self.num_subfolders_train):
+                for i in range(self.num_subfolders_eval):
                     os.makedirs(self.data_dir + "/valid/%d"%i, exist_ok=True)
+            logging.info(f"{utcnow()} Generating dataset in {self.data_dir}/train and {self.data_dir}/valid")
+            logging.info(f"{utcnow()} Number of files for training dataset: {self.num_files_train}")
+            logging.info(f"{utcnow()} Number of files for validation dataset: {self.num_files_eval}")
+
+
         MPI.COMM_WORLD.barrier()
         # What is the logic behind this formula? 
         # Will probably have to adapt to generate non-images

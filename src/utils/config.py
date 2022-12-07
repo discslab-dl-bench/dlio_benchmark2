@@ -14,9 +14,11 @@
    limitations under the License.
 """
 
+from typing import List, ClassVar
 from src.common.enumerations import FormatType, Shuffle, ReadType, FileAccess, Compression, FrameworkType, DataLoaderType, Profiler
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hydra
+import os
 
 @dataclass
 class ConfigArguments:
@@ -41,24 +43,23 @@ class ConfigArguments:
     seed_change_epoch: bool = True
     generate_data: bool = False
     generate_only: bool = False
-    data_folder: str = "./data"
+    data_folder: str = "./data/"
     output_folder: str = "./output"
-    logdir: str = "./logdir"
+    checkpoint_folder: str = "./checkpoints/"
     log_file: str  = "dlio.log"
     file_prefix: str = "img"
     keep_files: bool = True
-    do_profiling: bool = False
-    profiler: Profiler = Profiler.NONE
+    do_profiling: bool = True
+    profiler: Profiler = Profiler.IOSTAT
     seed: int = 123
     do_checkpoint: bool = False
     checkpoint_after_epoch: int = 1 
-    epochs_between_checkpoints: int = 0
-    steps_between_checkpoints: int =0
+    epochs_between_checkpoints: int = 1
+    steps_between_checkpoints: int = -1
     transfer_size: int = None
     read_threads: int = 1
     computation_threads: int = 1
     computation_time: float = 0.
-    prefetch: bool = False
     prefetch_size: int = 0 
     enable_chunking: bool = False
     chunk_size: int = 0
@@ -71,11 +72,12 @@ class ConfigArguments:
     num_files_eval: int = 0
     eval_time: float = 0.0
     eval_after_epoch: int = 0
-    epochs_between_evals: int = 0 
+    epochs_between_evals: int = 1
     model_size: int = 10240
     data_loader: DataLoaderType = DataLoaderType.TENSORFLOW
     num_subfolders_train: int = 0
     num_subfolders_eval: int = 0
+    iostat_devices: ClassVar[List[str]] = []
 
     def __init__(self):
         """ Virtually private constructor. """
@@ -90,15 +92,20 @@ class ConfigArguments:
         if ConfigArguments.__instance is None:
             ConfigArguments()
         return ConfigArguments.__instance
-    
+    def validate(self):
+        """ validate whether the parameters are set correctly"""
+        if (self.do_profiling == True) and (self.profiler == Profiler('darshan')):
+            if ('LD_PRELOAD' not in os.environ or os.environ["LD_PRELOAD"].find("libdarshan")==-1):
+                raise Exception("Please set darshan runtime library in LD_PRELOAD")
+        if (self.framework==FrameworkType.TENSORFLOW and self.data_loader == DataLoaderType.PYTORCH) or (self.framework==FrameworkType.PYTORCH and self.data_loader == DataLoaderType.TENSORFLOW):
+            raise Exception("Imcompatible between framework and data_loader setup.")
+
 def LoadConfig(args, config):
     '''
     Override the args by a system config (typically loaded from a YAML file)
     '''
     if 'framework' in config:
         args.framework = FrameworkType(config['framework'])
-    if 'logdir' in config:
-        args.logdir = config['logdir']
     # dataset related settings
     if 'dataset' in config:
         if 'record_length' in config['dataset']:
@@ -119,6 +126,8 @@ def LoadConfig(args, config):
             args.batch_size = config['dataset']['batch_size']
         if 'batch_size_eval' in config['dataset']:
             args.batch_size_eval = config['dataset']['batch_size_eval']
+        if 'enable_chunking' in config['dataset']:
+            args.enable_chunking = config['dataset']['enable_chunking']
         if 'chunk_size' in config['dataset']:
             args.chunk_size = config['dataset']['chunk_size']
         if 'compression' in config['dataset']:
@@ -175,12 +184,16 @@ def LoadConfig(args, config):
             args.eval_time = config['evaluation']['eval_time']
         if 'eval_after_epoch' in config['evaluation']:
             args.eval_after_epoch = config['evaluation']['eval_after_epoch']
+        if 'epochs_between_evals' in config['evaluation']:
+            args.epochs_between_evals = config['evaluation']['epochs_between_evals']
 
-    if 'checkpoint' in config:   
+    if 'checkpoint' in config:
+        if 'checkpoint_folder' in config['checkpoint']:
+            args.checkpoint_folder = config['checkpoint']['checkpoint_folder']
         if 'checkpoint_after_epoch' in config['checkpoint']:
             args.checkpoint_after_epoch = config['checkpoint']['checkpoint_after_epoch']
         if 'epochs_between_checkpoints' in config['checkpoint']:
-            args.epochs_between_checkpoints = config['checkpoint']['steps_between_checkpoints']
+            args.epochs_between_checkpoints = config['checkpoint']['epochs_between_checkpoints']
         if 'steps_between_checkpoints' in config['checkpoint']:
             args.steps_between_checkpoints = config['checkpoint']['steps_between_checkpoints']
         if 'model_size' in config['checkpoint']:
@@ -189,17 +202,23 @@ def LoadConfig(args, config):
     if 'workflow' in config:
         if 'generate_data' in config['workflow']:
             args.generate_data = config['workflow']['generate_data']
-        if not ('train' in config['workflow'] and config['workflow']['train']):
+        if not (('train' in config['workflow']) and config['workflow']['train']):
             args.generate_only = True
+        else:
+            args.generate_only = False
         if 'debug' in config['workflow']:
             args.debug = config['workflow']['debug']
-        if 'profiling' in config['workflow']:
-            args.profiling = config['workflow']['profiling']
         if 'evaluation' in config['workflow']:
             args.do_eval= config['workflow']['evaluation']
         if 'checkpoint' in config['workflow']:
             args.do_checkpoint= config['workflow']['checkpoint']
         if 'profiling' in config['workflow']: 
-            args.do_profiling = True
-            args.profiler = Profiler(config['workflow']['profiling'])
-        
+            args.do_profiling = config['workflow']['profiling']
+
+    if 'profiling' in config: 
+        if 'profiler' in config['profiling']:
+            args.profiler = Profiler(config['profiling']['profiler'])
+        if 'iostat_devices' in config['profiling']:
+            args.iostat_devices = config['profiling']['iostat_devices']
+            if isinstance(args.iostat_devices, str):
+                args.iostat_devices = [args.iostat_devices]

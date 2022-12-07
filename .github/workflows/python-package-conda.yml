@@ -1,6 +1,8 @@
 name: Python Package using Conda
 
-on: [push]
+on:
+  push:
+  pull_request:
 
 jobs:
   build-linux:
@@ -18,23 +20,42 @@ jobs:
       run: |
         sudo apt-get install mpich
         python -m pip install --upgrade pip
-        pip install tensorflow torch h5py mpi4py pandas
-        HOROVOD_WITH_TENSORFLOW=1 HOROVOD_WITH_PYTORCH=1 pip install horovod 
         pip install -r requirements.txt
-        python setup.py build
-        python setup.py install
+        pip install pytest pytest-mpi pytest-subtests 
+    - name: pytest-seq
+      run: |
+        touch __init__.py
+        export PYTHONPATH=./:$PYTHONPATH
+        python3 -m pytest -v
+    - name: pytest-mpi
+      run: |
+        touch __init__.py
+        export PYTHONPATH=./:$PYTHONPATH
+        mpirun -np 2 python3 -m pytest  --with-mpi
     - name: test-tf-loader-tfrecord
       run: |
         touch __init__.py
         export PYTHONPATH=./:$PYTHONPATH
-        mpirun -n 2 python ./src/dlio_benchmark.py workload=resnet50 ++workload.dataset.num_files_train=64
+        mpirun -n 2 python ./src/dlio_benchmark.py workload=resnet50 ++workload.dataset.num_files_train=64 ++workload.workflow.train=False ++workload.workflow.generate_data=True  ++workload.dataset.num_files_train=16 ++workload.dataset.num_samples_per_file=16
+        mpirun -n 2 python ./src/dlio_benchmark.py workload=resnet50 ++workload.dataset.num_files_train=64 ++workload.workflow.train=True ++workload.workflow.generate_data=False  ++workload.dataset.num_files_train=16 ++workload.dataset.num_samples_per_file=16
+        output=`ls -d ./hydra_log/resnet50/* | tail -1`
+        python ./src/dlio_postprocessor.py --output-folder=${output}
+        cat ${output}/*.txt
     - name: test-torch-loader-npz
       run: |
         touch __init__.py
         export PYTHONPATH=./:$PYTHONPATH
-        mpirun -n 2 python ./src/dlio_benchmark.py workload=unet3d ++workload.train.computation_time=0.05 ++workload.evaluation.eval_time=0.01 ++workload.train.epochs=2
+        mpirun -n 2 python ./src/dlio_benchmark.py workload=unet3d ++workload.train.computation_time=0.05 ++workload.evaluation.eval_time=0.01 ++workload.train.epochs=2 ++workload.workflow.train=False ++workload.workflow.generate_data=True ++workload.dataset.num_files_train=16 ++workload.dataset.num_files_eval=4
+        mpirun -n 2 python ./src/dlio_benchmark.py workload=unet3d ++workload.train.computation_time=0.05 ++workload.evaluation.eval_time=0.01 ++workload.train.epochs=2 ++workload.workflow.train=True ++workload.workflow.generate_data=False ++workload.dataset.num_files_train=16 ++workload.dataset.num_files_eval=4
+        output=`ls -d ./hydra_log/unet3d/* | tail -1`
+        python ./src/dlio_postprocessor.py --output-folder=${output}
+        cat ${output}/*.txt
     - name: test-tf-loader-npz
       run: |
         touch __init__.py
         export PYTHONPATH=./:$PYTHONPATH
-        mpirun -n 2 python ./src/dlio_benchmark.py workload=unet3d ++workload.framework=tensorflow ++workload.data_reader.data_loader=tensorflow ++workload.train.computation_time=0.05 ++workload.evaluation.eval_time=0.01 ++workload.train.epochs=2
+        mpirun -n 2 python ./src/dlio_benchmark.py workload=unet3d ++workload.framework=tensorflow ++workload.data_reader.data_loader=tensorflow ++workload.train.computation_time=0.05 ++workload.evaluation.eval_time=0.01 ++workload.train.epochs=2 ++workload.workflow.train=False ++workload.workflow.generate_data=True ++workload.dataset.num_files_train=16 ++workload.dataset.num_files_eval=4
+        mpirun -n 2 python ./src/dlio_benchmark.py workload=unet3d ++workload.framework=tensorflow ++workload.data_reader.data_loader=tensorflow ++workload.train.computation_time=0.05 ++workload.evaluation.eval_time=0.01 ++workload.train.epochs=2 ++workload.workflow.train=True ++workload.workflow.generate_data=False ++workload.dataset.num_files_train=16 ++workload.dataset.num_files_eval=4
+        output=`ls -d ./hydra_log/unet3d/* | tail -1`
+        python ./src/dlio_postprocessor.py --output-folder=${output}
+        cat ${output}/*.txt

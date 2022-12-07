@@ -1,5 +1,6 @@
 """
-   Copyright 2021 UChicago Argonne, LLC
+   Copyright © 2022, UChicago Argonne, LLC
+   All Rights Reserved
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -33,26 +34,18 @@ class JPEGGenerator(DataGenerator):
 
     def generate(self):
         """
-        Generator for creating data in NPZ format of 3d dataset.
+        Generator for creating data in JPEG format of 3d dataset.
         """
         super().generate()
         dim = int(np.sqrt(self.record_size/3.0))
         record_labels = [0] 
-        prev_out_spec =""
-        count = 0
         logging.info(f"dimension of images: {dim} x {dim} x 3")
 
-        for i in range(0, int(self.total_files_to_generate)):
+        for i in range(self.my_rank, int(self.total_files_to_generate), self.comm_size):
             records = random.randint(255, size=(dim, dim, 3), dtype=np.uint8)
             img = im.fromarray(records)
             if self.my_rank == 0 and i % 100 == 0:
                 logging.info(f"Generated file {i}/{self.total_files_to_generate}")
-            if i % self.comm_size == self.my_rank:
-                out_path_spec = self._file_list[i]
-                progress(i+1, self.total_files_to_generate, "Generating JPEG Data")
-                if count == 0:
-                    prev_out_spec = out_path_spec
-                    img.save(out_path_spec, format='JPEG', bits=8)
-                    count += 1
-                else:
-                    copyfile(prev_out_spec, out_path_spec)
+            out_path_spec = self._file_list[i]
+            progress(i+1, self.total_files_to_generate, "Generating JPEG Data")
+            img.save(out_path_spec, format='JPEG', bits=8)

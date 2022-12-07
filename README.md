@@ -1,26 +1,46 @@
-# Deep Learining I/O (DLIO) Benchmark
+# Deep Learning I/O (DLIO) Benchmark
+![test status](https://github.com/argonne-lcf/dlio_benchmark/actions/workflows/python-package-conda.yml/badge.svg)
 
-Documentation: https://argonne-lcf.github.io/dlio_benchmark/
+This README provides a abbreviated documentation of the DLIO code. Please refer to https://argonne-lcf.github.io/dlio_benchmark/ for full user documentation. 
 
 ## Overview
 
 DLIO is an I/O benchmark for Deep Learning. DLIO is aimed at emulating the I/O behavior of various deep learning applications. The benchmark is delivered as an executable that can be configured for various I/O patterns. It uses a modular design to incorporate more data loaders, data formats, datasets, and configuration parameters. It emulates modern deep learning applications using Benchmark Runner, Data Generator, Format Handler, and I/O Profiler modules. 
 
-### Features 
-* Easy-to-use and highly configurable argument list to emulate deep learning application's I/O behavior.
-* Able to generate synthetic datasets for different deep learning applications. 
-* Full transparency over emulation of I/O access with logging at different levels.
-* Easy to use data generator to test the performance of different data layouts and its impact on the I/O performance.
-* Compatible with modern profiling tools such as Tensorboard and Darshan to extract and analyze I/O behavior.
-
 ## Installation and running DLIO
+### Bare metal installation 
 
 ```bash
 git clone https://github.com/argonne-lcf/dlio_benchmark
 cd dlio_benchmark/
-pip install -r requirements.txt 
-python ./src/dlio_benchmark.py --help
+pip install -r requirements.txt
+export PYTHONPATH=$PWD/:$PYTHONPATH
+python ./src/dlio_benchmark.py ++workload.workflow.generate_data=True
+
+Additionally, to generate the report `iostat` is needed and can be installed from the `sysstat` package using your package manager.
+
 ```
+## Container
+
+```bash
+git clone https://github.com/argonne-lcf/dlio_benchmark
+cd dlio_benchmark/
+docker build -t dlio .
+docker run -t dlio python ./src/dlio_benchmark.py ++workload.workflow.generate_data=True
+``` 
+
+You can also pull rebuilt container from docker hub: 
+```bash
+docker docker.io/zhenghh04/dlio:latest
+docker run -t docker.io/zhenghh04/dlio:latest python ./src/dlio_benchmark.py ++workload.workflow.generate_data=True
+```
+
+One can also run interactively 
+```bash
+docker run -t docker.io/zhenghh04/dlio:latest /bin/bash
+root@30358dd47935:/workspace/dlio# python ./src/dlio_benchmark.py ++workload.workflow.generate_data=True
+```
+
 
 ## Running the benchmark
 
@@ -29,89 +49,72 @@ A DLIO run is split in 3 phases:
 - Run the benchmark using the previously generated data
 - Post-process the results to generate a report
 
-The configurations of a workload can be specified through a yaml file. Examples of yaml files can be find in [./configs/workload/](./configs/workload). 
+The configurations of a workload can be specified through a yaml file. Examples of yaml files can be found in [./configs/workload/](./configs/workload). 
 
-One can specify specify workload through ```workload=``` option in the command line. The configuration can be overridden through commandline in the ```hyra``` framework (e.g.```++workload.framework=tensorflow```). 
+One can specify the workload through the ```workload=``` option on the command line. Specific configuration fields can then be overridden following the ```hydra``` framework convention (e.g. ```++workload.framework=tensorflow```). 
 
-For example, to run the unet3d benchark, one can do
-```bash
-mpirun -np 8 python src/dlio_benchmark.py workload=unet3d
-```
-This will both generate the dataset and perform benchmark. 
-
-One can separate the data generation part and training part as 
-* data generation
+First, generate the data
   ```bash
-  mpirun -np 8 python src/dlio_benchmark.py workload=unet3d ++workload.workflow.generate_data=True ++workload.workflow.train=False ++workload.workflow.evaluation=False
+  mpirun -np 8 python3 src/dlio_benchmark.py workload=unet3d ++workload.workflow.generate_data=True ++workload.workflow.train=False
   ```
-* running benchmark
+If possible, one can flush the filesystem caches in order to properly capture device I/O
   ```bash
-  mpirun -np 8 python src/dlio_benchmark.py workload=unet3d ++workload.workflow.generate_data=False ++workload.workflow.train=True ++workload.workflow.evaluation=True
+  sudo sync && echo 3 | sudo tee /proc/sys/vm/drop_caches
+  ```
+Finally, run the benchmark with ```iostat``` profiling, listing the io devices you would like to trace.
+  ```bash
+  mpirun -np 8 python3 src/dlio_benchmark.py workload=unet3d ++workload.workflow.profiling=True ++workload.profiling.profiler=iostat ++workload.profiling.iostat_devices=[sda,sdb]
   ```
 
 All the outputs will be stored in ```hydra_log/unet3d/$DATE-$TIME``` folder. To post process the data, one can do
 ```bash 
-python3 src/dlio_postprocessor.py --output_folder=hydra_log/unet3d/$DATE-$TIME
+python3 src/dlio_postprocessor.py --output-folder hydra_log/unet3d/$DATE-$TIME
 ```
-This will generate ```DLIO_$model_report.txt``` inside the output folder. 
+This will generate ```DLIO_$model_report.txt``` in the output folder. 
 
 ## Workload YAML configuration file 
+Workload characteristics are specified by a YAML configuration file. Below is an example of a YAML file for the UNet3D workload which is used for 3D image segmentation. 
 
 ```
-$ python3 src/dlio_benchmark.py --help
-  The configuration can be specified by a yaml config file.
+  # contents of unet3d.yaml
+  model: unet3d
 
-  A complete list of config options are: 
+  framework: pytorch
 
   workflow:
-    generate_data: whether to generate data
-    train: whether to perform training 
-    debug: whether to turn on debugging
-    profiling: profiler to be used. Default: none
-  framework: specifying the framework to use [tensorflow | pytorch]
-  dataset:
-    record_length: size of sample in bytes
-    format: the format of the file that the dataset is stored [hdf5|png|jepg|csv...]
-    num_files_train: number of files for training dataset
-    num_files_val:  number of files for validation dataset
-    num_samples_per_file:  number of samples per file
-    data_dir: the directory that the dataset is stored
-    batch_size: batch size for the training dataset
-    batch_size_eval: batch size fo the validation dataset 
-    file_prefix: the prefix of the dataset files 
-    compression: compression to use
-    compression_level: Level of compression for GZIP
-    chunking: whether to use chunking in generating HDF5 datasets
-  data_loader: 
-    data_loader: the data loader to use [tensorflow|pytorch]
-    read_threads: number of threads to load the dataset
-    computation_threads:  number of threads for preprocessing the data
-    prefetch: whether to prefetch the data
-    prefetch_size: the buffer size for prefetch
-    read_shuffle: whether to shuffle the dataset
-    shuffle_size: the shuffle buffer size in byte
-    read_type: whether it is ON_DEMAND or MEMORY (stored in the memory)
-    file_access: multiple files or shared file access
-    transfer_size: transfer size for tensorflow data loader
-  train:
-    n_epochs: number of epochs for training
-    computation_time: simulated training time (in seconds) for each training step
-    eval_time: simulated evaluation time (in seconds) for each step
-    total_training_steps:  total number of traning steps. If this is set, n_epochs will be ignored
-    seed_change_epoch: whether to change the random seed after each epoch 
-    eval_after_epoch: start evaluation after eval_after_epoch epochs
-    do_eval: whether to do evaluation
-    seed: the random seed
-  checkpoint: 
-    do_checkpoint:  whether to do checkpoint
-    checkpoing_after_epoch: start checkpointing after certain number of epochs specified 
-    epochs_between_checkpoints: performing one checkpointing per certain number of epochs specified 
-    output_folder: the output folder for checkpointing 
-    model_size:  the size of the model in bytes
+    generate_data: False
+    train: True
+    evaluation: True
 
-  You can override everything in a command line, for example:
-  python src/dlio_benchmark.py framework=tensorflow
+  dataset: 
+    data_folder: ./data/unet3d/
+    format: npz
+    num_files_train: 3620
+    num_files_eval: 42
+    num_samples_per_file: 1
+    batch_size: 4
+    batch_size_eval: 1
+    file_access: multi
+    record_length: 1145359
+    keep_files: True
+  
+  data_reader: 
+    data_loader: pytorch
+    read_threads: 4
+    prefetch: True
+
+  train:
+    epochs: 10
+    computation_time: 4.59
+
+  evaluation: 
+    eval_time: 11.572
+    epochs_between_evals: 2
 ```
+
+The full list of configurations can be found in: https://argonne-lcf.github.io/dlio_benchmark/config.html
+
+The YAML file is loaded through hydra (https://hydra.cc/). The default setting are overridden by the configurations loaded from the YAML file. One can override the configuration through command line (https://hydra.cc/docs/advanced/override_grammar/basic/). 
 
 ## Current Limitations and Future Work
 
@@ -139,6 +142,7 @@ If you would like to contribute, please submit issue to https://github.com/argon
 
 ## Citation and Reference
 The original paper describe the design and implementation of DLIO code is as follows: 
+
 ```
 @article{devarajan2021dlio,
   title={DLIO: A Data-Centric Benchmark for Scientific Deep Learning Applications},
@@ -150,8 +154,11 @@ The original paper describe the design and implementation of DLIO code is as fol
   pages={},
   publisher={IEEE/ACM}
 }
+```
 
 We also encourage people to take a look at a relevant work from MLPerf Storage working group. 
+
+```
 @article{balmau2022mlperfstorage,
   title={Characterizing I/O in Machine Learning with MLPerf Storage},
   author={O. Balmau},
@@ -163,11 +170,18 @@ We also encourage people to take a look at a relevant work from MLPerf Storage w
 }
 ```
 
-## Acknowledgements
+## Acknowledgments
+
 This work used resources of the Argonne Leadership Computing Facility, which is a DOE Office of Science User Facility under Contract DE-AC02-06CH11357 and is supported in part by National Science Foundation under NSF, OCI-1835764 and NSF, CSR-1814872.
 
 ## License
-Apache 2.0 
 
-Copyright@2021 UChicago Argonne LLC
+Apache 2.0 [LICENSE](./LICENSE)
 
+---------------------------------------
+Copyright © 2022, UChicago Argonne, LLC
+All Rights Reserved
+
+If you have questions about your rights to use or distribute this software, please contact Argonne Intellectual Property Office at partners@anl.gov
+
+NOTICE. This Software was developed under funding from the U.S. Department of Energy and the U.S. Government consequently retains certain rights. As such, the U.S. Government has been granted for itself and others acting on its behalf a paid-up, nonexclusive, irrevocable, worldwide license in the Software to reproduce, distribute copies to the public, prepare derivative works, and perform publicly and display publicly, and to permit others to do so.

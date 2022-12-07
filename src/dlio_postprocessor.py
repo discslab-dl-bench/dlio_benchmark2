@@ -1,5 +1,6 @@
 """
-   Copyright 2021 UChicago Argonne, LLC
+   Copyright © 2022, UChicago Argonne, LLC
+   All Rights Reserved
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -24,8 +25,10 @@ from statistics import mean, median, stdev, quantiles
 from src.utils.config import ConfigArguments, LoadConfig
 import hydra
 from omegaconf import DictConfig, OmegaConf
+from hydra import initialize, compose
 import yaml 
 import glob
+
 
 class DLIOPostProcessor:
     def __init__(self, args) -> None:
@@ -487,7 +490,6 @@ class DLIOPostProcessor:
 
             format_print(outfile, overall_desc, indent=1)
             if (self.iotrace is not None):
-                print(self.iotrace)
                 write_out_stats_table(outfile, self.overall_stats, indent=1)
 
             outfile.write("\nDetailed Report\n\n")
@@ -587,13 +589,15 @@ def main():
 
     # load the yaml file and override the command line argument
     base_config = os.path.join(args.output_folder, "./.hydra/config.yaml")
-    override_config = os.path.join(args.output_folder, "./.hydra/override.yaml")
+    override_config = os.path.join(args.output_folder, "./.hydra/overrides.yaml")
     with open(base_config) as f:
         hydra_config  = yaml.load(f, Loader=SafeLoader)
     LoadConfig(args, hydra_config['workload'])
     if 'model' in hydra_config['workload']:
         args.name = hydra_config['workload']['model']
-    for op in override_config:
+    else:
+        args.name="default"
+    for op in open(override_config, "r").readlines():
         if op.find("train.epochs")!=-1:
             args.epochs = int(op.split("=")[1])
         if op.find('batch_size=')!=-1:

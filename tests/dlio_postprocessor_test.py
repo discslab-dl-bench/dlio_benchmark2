@@ -2,6 +2,9 @@ from collections import namedtuple
 import unittest
 
 from src.dlio_postprocessor import DLIOPostProcessor
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['AUTOGRAPH_VERBOSITY'] = '0'
 
 class TestDLIOPostProcessor(unittest.TestCase):
 
@@ -10,7 +13,7 @@ class TestDLIOPostProcessor(unittest.TestCase):
 
     def test_process_loading_and_processing_times(self):
         args = {
-            'output_folder': 'tst/test_data',
+            'output_folder': 'tests/test_data',
             'name': '',
             'num_proc': 2,
             'epochs': 2,

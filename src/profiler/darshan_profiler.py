@@ -1,5 +1,6 @@
 """
-   Copyright 2021 UChicago Argonne, LLC
+   Copyright © 2022, UChicago Argonne, LLC
+   All Rights Reserved
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -29,18 +30,20 @@ class DarshanProfiler(IOProfiler):
 
     def __init__(self):
         super().__init__()
+
         """ Virtually private constructor. """
         if DarshanProfiler.__instance is not None:
             raise Exception("This class is a singleton!")
         else:
             DarshanProfiler.__instance = self
+            
+        os.environ["DARSHAN_MOD_ENABLE"]="DXT_POSIX,DXT_MPIIO"            
+        os.environ["DARSHAN_LOG_DIR"] = self._args.output_folder
+        os.environ["DARSHAN_LOGFILE"] = self._args.output_folder + "/dlio_benchmark.darshan"
 
+        
     def start(self):
-        #  this has to be changed to allow specifying DARSHAN librrary through DARSHAN_PRELOAD
-        os.environ["LD_PRELOAD"] = os.environ["DARSHAN_PRELOAD"]
-        os.environ["DXT_ENABLE_IO_TRACE"] = "1"
         os.environ["DARSHAN_DISABLE"] = "0"
 
     def stop(self):
-        del os.environ['LD_PRELOAD']
-        del os.environ['DXT_ENABLE_IO_TRACE']
+        os.environ['DARSHAN_DISABLE'] = '1'

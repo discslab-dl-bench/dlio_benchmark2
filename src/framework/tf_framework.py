@@ -1,6 +1,7 @@
 """
-   Copyright 2021 UChicago Argonne, LLC
-
+   Copyright © 2022, UChicago Argonne, LLC
+   All Rights Reserved
+   
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
@@ -26,11 +27,8 @@ from src.common.enumerations import FrameworkType, Profiler, FormatType, Dataset
 
 import tensorflow as tf
 
-print(tf.sysconfig.get_link_flags())
-import horovod.tensorflow as hvd
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-hvd.init()
 
 class TFFramework(Framework):
     __instance = None
@@ -38,8 +36,9 @@ class TFFramework(Framework):
     def __init__(self, profiling):
         super().__init__()
         self.profiling = profiling
+        # TODO: Temporary fix, need to separate the iostat profiler (needed for report gen) and the others
         if profiling:
-            self.tensorboard = ProfilerFactory.get_profiler(Profiler.TENSORBOARD)
+            self.tensorboard = ProfilerFactory.get_profiler(Profiler.NONE)
         self.reader_handler = None
 
     def init_reader(self, format_type, data_loader=None):
@@ -56,19 +55,6 @@ class TFFramework(Framework):
             TFFramework.__instance = TFFramework(profiling)
         return TFFramework.__instance
 
-    def barrier(self):
-        """
-        Barrier implementation using horovod's all-reduce
-        """
-        const = tf.constant(1)
-        reduced = hvd.allreduce(const)
-
-    def rank(self):
-        return hvd.rank()
-
-    def size(self):
-        return hvd.size()
-
     def start_framework_profiler(self):
         if self.profiling:
             self.tensorboard.start()
@@ -80,18 +66,18 @@ class TFFramework(Framework):
     def trace_object(self, string, step, r):
         return tf.profiler.experimental.Trace(string, step_num=step, _r=r)
 
-    def checkpoint(self, step_number):
+    def checkpoint(self, epoch, step_number):
         """
         Performs Checkpointing for a specific step number. It writes different file of different sizes.
         """
         if self.rank() == 0:
             my_rank = self.rank()
-            if not os.path.exists(self.output_folder):
-                os.makedirs(self.output_folder)
+            if not os.path.exists(self.checkpoint_folder):
+                os.makedirs(self.checkpoint_folder)
 
-            model_file = os.path.join(self.output_folder, f"model_{step_number}_{my_rank}.bin")
-            meta_file = os.path.join(self.output_folder, f"meta_{step_number}_{my_rank}.bin")
-            index_file = os.path.join(self.output_folder, f"index_{step_number}_{my_rank}.bin")
+            model_file = os.path.join(self.checkpoint_folder, f"model-{epoch}-{step_number}.bin")
+            meta_file = os.path.join(self.checkpoint_folder, f"meta-{epoch}-{step_number}.bin")
+            index_file = os.path.join(self.checkpoint_folder, f"index-{epoch}-{step_number}.bin")
 
             f = open(model_file, "w")
             string_val = "x" * self.args.model_size 

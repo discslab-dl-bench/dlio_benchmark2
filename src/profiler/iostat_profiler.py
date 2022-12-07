@@ -1,5 +1,6 @@
 """
-   Copyright 2021 UChicago Argonne, LLC
+   Copyright © 2022, UChicago Argonne, LLC
+   All Rights Reserved
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -32,6 +33,7 @@ class IostatProfiler(IOProfiler):
     def __init__(self):
         super().__init__()
         self.my_rank = self._args.my_rank
+        self.devices = self._args.iostat_devices
         self.logfile = os.path.join(self._args.output_folder, 'iostat.json')
         """ Virtually private constructor. """
         if IostatProfiler.__instance is not None:
@@ -43,10 +45,18 @@ class IostatProfiler(IOProfiler):
         if self.my_rank == 0:
             # Open the logfile for writing
             self.logfile = open(self.logfile, 'w')
-            #TODO: Get the relevant disks (from user input?)
-            #iostat -c 5 -w 10 disk0
-            #cmd = ["iostat", "-mdxtcy", "-o", "JSON", "sda", "sdb", "1"]
-            cmd = ['iostat','-w', '1']
+            
+            # The following parameters are needed for the post-processing to parse correctly:
+            #   -m: Display stats in MB
+            #   -d: Display device utilisation report
+            #   -x: Display extended statistics
+            #   -t: Print the time for each report displayed
+            #   -c: Display CPU utilization
+            #   -y: Omit first report of stats since boot
+            #   -o: Output in JSON format
+            # If devs is empty, all devices are traced.
+            cmd = f"iostat -mdxtcy -o JSON {' '.join(self.devices)} 1"
+            cmd = cmd.split()
             self.process = sp.Popen(cmd, stdout=self.logfile, stderr=self.logfile)
 
     def stop(self):
