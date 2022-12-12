@@ -13,7 +13,7 @@ dataset:
  format: tfrecord
  num_files_train: 500
  num_samples_per_file: 313532
- record-length: 2500
+ record_length: 2500
  batch_size: 48
 
 train:
