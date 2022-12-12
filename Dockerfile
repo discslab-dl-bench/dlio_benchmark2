@@ -13,3 +13,5 @@ RUN python -m pip install --upgrade pip
 RUN pip install  -r requirements.txt
 
 ENV PYTHONPATH="${PYTHONPATH}:/workspace/dlio"
+
+# ENTRYPOINT /bin/bash
