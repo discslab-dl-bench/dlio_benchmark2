@@ -1,5 +1,10 @@
 #!/bin/bash
 
+echo "Please modify docker image name, data and output directories!"
+
 WORKLOAD=${1:-bert}
 
-docker run -it --rm -v /raid/data/dlio:/workspace/dlio/data dlio:loic /bin/bash do_datagen.sh $WORKLOAD
+IMAGE_NAME=
+DATA_DIR=
+
+docker run -it --rm -v $DATA_DIR:/workspace/dlio/data $IMAGE_NAME /bin/bash do_datagen.sh $WORKLOAD
