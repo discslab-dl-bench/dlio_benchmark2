@@ -1,7 +1,7 @@
 # Deep Learning I/O (DLIO) Benchmark
 ![test status](https://github.com/argonne-lcf/dlio_benchmark/actions/workflows/python-package-conda.yml/badge.svg)
 
-This README provides a abbreviated documentation of the DLIO code. Please refer to https://argonne-lcf.github.io/dlio_benchmark/ for full user documentation. 
+This README provides an abbreviated documentation of the DLIO code. Please refer to https://argonne-lcf.github.io/dlio_benchmark/ for full user documentation. 
 
 ## Overview
 
@@ -16,10 +16,9 @@ cd dlio_benchmark/
 pip install -r requirements.txt
 export PYTHONPATH=$PWD/:$PYTHONPATH
 python ./src/dlio_benchmark.py ++workload.workflow.generate_data=True
-
+```
 Additionally, to generate the report `iostat` is needed and can be installed from the `sysstat` package using your package manager.
 
-```
 ## Container
 
 ```bash
@@ -29,23 +28,22 @@ docker build -t dlio .
 docker run -t dlio python ./src/dlio_benchmark.py ++workload.workflow.generate_data=True
 ``` 
 
-You can also pull rebuilt container from docker hub: 
+You can also pull rebuilt container from docker hub (might not reflect the most recent change of the code): 
 ```bash
 docker docker.io/zhenghh04/dlio:latest
 docker run -t docker.io/zhenghh04/dlio:latest python ./src/dlio_benchmark.py ++workload.workflow.generate_data=True
 ```
 
-One can also run interactively 
+One can also run interactively inside the container
 ```bash
 docker run -t docker.io/zhenghh04/dlio:latest /bin/bash
-root@30358dd47935:/workspace/dlio# python ./src/dlio_benchmark.py ++workload.workflow.generate_data=True
+root@30358dd47935:/workspace/dlio$ python ./src/dlio_benchmark.py ++workload.workflow.generate_data=True
 ```
-
 
 ## Running the benchmark
 
 A DLIO run is split in 3 phases: 
-- Generate synthetic data DLIO will use
+- Generate synthetic data that DLIO will use
 - Run the benchmark using the previously generated data
 - Post-process the results to generate a report
 
@@ -76,40 +74,40 @@ This will generate ```DLIO_$model_report.txt``` in the output folder.
 Workload characteristics are specified by a YAML configuration file. Below is an example of a YAML file for the UNet3D workload which is used for 3D image segmentation. 
 
 ```
-  # contents of unet3d.yaml
-  model: unet3d
+# contents of unet3d.yaml
+model: unet3d
 
-  framework: pytorch
+framework: pytorch
 
-  workflow:
-    generate_data: False
-    train: True
-    evaluation: True
+workflow:
+  generate_data: False
+  train: True
+  checkpoint: True
 
-  dataset: 
-    data_folder: ./data/unet3d/
-    format: npz
-    num_files_train: 3620
-    num_files_eval: 42
-    num_samples_per_file: 1
-    batch_size: 4
-    batch_size_eval: 1
-    file_access: multi
-    record_length: 1145359
-    keep_files: True
+dataset: 
+  data_folder: data/unet3d/
+  format: npz
+  num_files_train: 168
+  num_samples_per_file: 1
+  record_length: 234560851
+  record_length_stdev: 109346892
   
-  data_reader: 
-    data_loader: pytorch
-    read_threads: 4
-    prefetch: True
+reader: 
+  data_loader: pytorch
+  batch_size: 4
+  read_threads: 4
+  file_shuffle: seed
+  sample_shuffle: seed
 
-  train:
-    epochs: 10
-    computation_time: 4.59
+train:
+  epochs: 10
+  computation_time: 1.3604
 
-  evaluation: 
-    eval_time: 11.572
-    epochs_between_evals: 2
+checkpoint:
+  checkpoint_folder: checkpoints/unet3d
+  checkpoint_after_epoch: 5
+  epochs_between_checkpoints: 2
+  model_size: 499153191
 ```
 
 The full list of configurations can be found in: https://argonne-lcf.github.io/dlio_benchmark/config.html
@@ -129,7 +127,7 @@ The YAML file is loaded through hydra (https://hydra.cc/). The default setting a
   - For npz, jpg, jpeg, hdf5, we currently only support one sample per file case. In other words, each sample is stored in an independent file. Multiple samples per file case will be supported in future. 
 
 ## How to contribute 
-We are open to the contribution from the community for the development of the benchmark. Specifically, we welcome contribution in the following aspects:
+We welcome contributions from the community to the benchmark code. Specifically, we welcome contribution in the following aspects:
 General new features needed including: 
 
 * support for new workloads: if you think that your workload(s) would be interested to the public, and would like to provide the yaml file to be included in the repo, please submit an issue.  
@@ -138,10 +136,10 @@ General new features needed including:
 * support for noval file systems or storage, such as AWS S3. 
 * support for loading new data formats. 
 
-If you would like to contribute, please submit issue to https://github.com/argonne-lcf/dlio_benchmark/issues, and contact ALCF DLIO team, Huihuo Zheng at huihuo.zheng@anl.gov
+If you would like to contribute, please submit an issue to https://github.com/argonne-lcf/dlio_benchmark/issues, and contact ALCF DLIO team, Huihuo Zheng at huihuo.zheng@anl.gov
 
 ## Citation and Reference
-The original paper describe the design and implementation of DLIO code is as follows: 
+The original CCGrid'21 paper describes the design and implementation of DLIO code. Please cite this paper if you use DLIO for your research. 
 
 ```
 @article{devarajan2021dlio,
@@ -156,8 +154,9 @@ The original paper describe the design and implementation of DLIO code is as fol
 }
 ```
 
-We also encourage people to take a look at a relevant work from MLPerf Storage working group. 
 
+
+We also encourage people to take a look at a relevant work from MLPerf Storage working group. 
 ```
 @article{balmau2022mlperfstorage,
   title={Characterizing I/O in Machine Learning with MLPerf Storage},
@@ -179,7 +178,7 @@ This work used resources of the Argonne Leadership Computing Facility, which is 
 Apache 2.0 [LICENSE](./LICENSE)
 
 ---------------------------------------
-Copyright © 2022, UChicago Argonne, LLC
+Copyright (c) 2022, UChicago Argonne, LLC
 All Rights Reserved
 
 If you have questions about your rights to use or distribute this software, please contact Argonne Intellectual Property Office at partners@anl.gov

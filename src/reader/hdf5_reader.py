@@ -1,5 +1,5 @@
 """
-   Copyright © 2022, UChicago Argonne, LLC
+   Copyright (c) 2022, UChicago Argonne, LLC
    All Rights Reserved
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -78,8 +78,8 @@ class HDF5Reader(FormatReader):
                 part_start, part_end = (int(total_samples_per_rank*self.my_rank/self.batch_size), int(total_samples_per_rank*(self.my_rank+1)/self.batch_size))
                 num_sets = list(range(part_start, part_end))
             total += len(num_sets)
-            if self.memory_shuffle != Shuffle.OFF:
-                if self.memory_shuffle == Shuffle.SEED:
+            if self.sample_shuffle != Shuffle.OFF:
+                if self.sample_shuffle == Shuffle.SEED:
                     random.seed(self.seed)
                 random.shuffle(num_sets)
             for num_set in num_sets:

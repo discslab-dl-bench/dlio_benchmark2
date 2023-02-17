@@ -1,5 +1,6 @@
 """
-   Copyright 2021 UChicago Argonne, LLC
+   Copyright (c) 2022, UChicago Argonne, LLC
+   All Rights Reserved
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -15,10 +16,11 @@
 """
 
 from typing import List, ClassVar
-from src.common.enumerations import FormatType, Shuffle, ReadType, FileAccess, Compression, FrameworkType, DataLoaderType, Profiler
+from src.common.enumerations import StorageType, FormatType, Shuffle, ReadType, FileAccess, Compression, FrameworkType, DataLoaderType, Profiler
 from dataclasses import dataclass, field
 import hydra
 import os
+import logging
 
 @dataclass
 class ConfigArguments:
@@ -26,16 +28,21 @@ class ConfigArguments:
 
     # command line argument
     # Framework to use
+    model: str = "default"
     framework: FrameworkType = FrameworkType.TENSORFLOW
     # Dataset format, such as PNG, JPEG
     format: FormatType = FormatType.TFRECORD
     # Shuffle type
-    read_shuffle: Shuffle = Shuffle.OFF
+    file_shuffle: Shuffle = Shuffle.OFF
     shuffle_size: int = 1024
-    memory_shuffle: Shuffle =Shuffle.OFF
+    sample_shuffle: Shuffle =Shuffle.OFF
     read_type: ReadType = ReadType.ON_DEMAND
     file_access: FileAccess = FileAccess.MULTI
+    # Set root as the current directory by default
+    storage_root: str = "./"
+    storage_type: StorageType = StorageType.LOCAL_FS
     record_length: int = 64 * 1024
+    record_length_stdev: int = 0
     num_files_train: int = 8 
     num_samples_per_file: int = 1
     batch_size: int = 1 
@@ -60,6 +67,7 @@ class ConfigArguments:
     read_threads: int = 1
     computation_threads: int = 1
     computation_time: float = 0.
+    computation_time_stdev: float = 0.
     prefetch_size: int = 0 
     enable_chunking: bool = False
     chunk_size: int = 0
@@ -71,7 +79,8 @@ class ConfigArguments:
     batch_size_eval: int = 1
     num_files_eval: int = 0
     eval_time: float = 0.0
-    eval_after_epoch: int = 0
+    eval_time_stdev: float = 0.0
+    eval_after_epoch: int = 1
     epochs_between_evals: int = 1
     model_size: int = 10240
     data_loader: DataLoaderType = DataLoaderType.TENSORFLOW
@@ -99,6 +108,8 @@ class ConfigArguments:
                 raise Exception("Please set darshan runtime library in LD_PRELOAD")
         if (self.framework==FrameworkType.TENSORFLOW and self.data_loader == DataLoaderType.PYTORCH) or (self.framework==FrameworkType.PYTORCH and self.data_loader == DataLoaderType.TENSORFLOW):
             raise Exception("Imcompatible between framework and data_loader setup.")
+    def reset(self):
+        ConfigArguments.__instance = None
 
 def LoadConfig(args, config):
     '''
@@ -106,10 +117,25 @@ def LoadConfig(args, config):
     '''
     if 'framework' in config:
         args.framework = FrameworkType(config['framework'])
+    if 'model' in config:
+        ''' 
+        most of the time, this won't change the benchmark. But in future we might use 
+        as a way to do model specific setting. 
+        '''
+        args.model = config['model']
+
+    if 'storage' in config:
+        if 'storage_type' in config['storage']:
+            args.storage_type = StorageType(config['storage']['storage_type'])
+        if 'storage_root' in config['storage']:
+            args.storage_root = config['storage']['storage_root']
+
     # dataset related settings
     if 'dataset' in config:
         if 'record_length' in config['dataset']:
             args.record_length = config['dataset']['record_length']
+        if 'record_length_stdev' in config['dataset']:
+            args.record_length_stdev = config['dataset']['record_length_stdev']
         if 'num_files_train' in config['dataset']:
             args.num_files_train = config['dataset']['num_files_train']
         if 'num_files_eval' in config['dataset']:
@@ -118,14 +144,11 @@ def LoadConfig(args, config):
             args.num_samples_per_file = config['dataset']['num_samples_per_file']
         if 'data_folder' in config['dataset']:
             args.data_folder = config['dataset']['data_folder']
+            args.data_folder = args.data_folder.rstrip('/')
         if 'num_subfolders_train' in config['dataset']:
             args.num_subfolders_train = config['dataset']['num_subfolders_train']
         if 'num_subfolders_eval' in config['dataset']:
             args.num_subfolders_eval = config['dataset']['num_subfolders_eval']
-        if 'batch_size' in config['dataset']:
-            args.batch_size = config['dataset']['batch_size']
-        if 'batch_size_eval' in config['dataset']:
-            args.batch_size_eval = config['dataset']['batch_size_eval']
         if 'enable_chunking' in config['dataset']:
             args.enable_chunking = config['dataset']['enable_chunking']
         if 'chunk_size' in config['dataset']:
@@ -141,30 +164,35 @@ def LoadConfig(args, config):
         if 'keep_files' in config['dataset']:
             args.keep_files = config['dataset']['keep_files']
 
-    # data loader
+    # data reader
+    reader=None
     if 'data_reader' in config:
-        if 'data_loader' in config['data_reader']:
-            args.data_loader = DataLoaderType(config['data_reader']['data_loader'])
-        if 'read_threads' in config['data_reader']:
-            args.read_threads = config['data_reader']['read_threads']
-        if 'computatation_threads' in config['data_reader']:
-            args.computatation_threads = config['data_reader']['computatation_threads']
-        if 'prefetch' in config['data_reader']:
-            args.prefetch = config['data_reader']['prefetch']
-        if 'prefetch_size' in config['data_reader']:
-            args.prefetch_size = config['data_reader']['prefetch_size']
-        if 'read_shuffle' in config['data_reader']:
-            args.read_shuffle = config['data_reader']['read_shuffle']
-        if 'shuffle_size' in config['data_reader']:
-            args.shuffle_size = config['data_reader']['shuffle_size']
-        if 'memory_shuffle' in config['data_reader']:
-            args.memory_shuffle = config['data_reader']['memory_shuffle']
-        if 'read_type' in config['data_reader']:
-            args.read_type = config['data_reader']['read_type']
-        if 'file_access' in config['data_reader']:
-            args.file_access = config['data_reader']['file_access']
-        if 'transfer_size' in config['data_reader']:
-            args.transfer_size = config['data_reader']['transfer_size']
+        reader = config['data_reader']
+    elif 'reader' in config:
+        reader = config['reader']
+    if reader is not None:
+        if 'data_loader' in reader:
+            args.data_loader = DataLoaderType(reader['data_loader'])
+        if 'read_threads' in reader:
+            args.read_threads = reader['read_threads']
+        if 'computatation_threads' in reader:
+            args.computatation_threads = reader['computatation_threads']
+        if 'batch_size' in reader:
+            args.batch_size = reader['batch_size']
+        if 'batch_size_eval' in reader:
+            args.batch_size_eval = reader['batch_size_eval']            
+        if 'prefetch_size' in reader:
+            args.prefetch_size = reader['prefetch_size']
+        if 'file_shuffle' in reader:
+            args.file_shuffle = reader['file_shuffle']
+        if 'shuffle_size' in reader:
+            args.shuffle_size = reader['shuffle_size']
+        if 'sample_shuffle' in reader:
+            args.sample_shuffle = reader['sample_shuffle']
+        if 'read_type' in reader:
+            args.read_type = reader['read_type']
+        if 'transfer_size' in reader:
+            args.transfer_size = reader['transfer_size']
 
     # training relevant setting
     if 'train' in config:
@@ -176,12 +204,16 @@ def LoadConfig(args, config):
             args.seed_change_epoch = config['train']['seed_change_epoch']
         if 'computation_time' in config['train']:
             args.computation_time = config['train']['computation_time']
+        if 'computation_time_stdev' in config['train']:
+            args.computation_time_stdev = config['train']['computation_time_stdev']
         if 'seed' in config['train']:
             args.seed = config['train']['seed']
         
     if 'evaluation' in config:
         if 'eval_time' in config['evaluation']:
             args.eval_time = config['evaluation']['eval_time']
+        if 'eval_time_stdev' in config['evaluation']:
+            args.eval_time_stdev = config['evaluation']['eval_time_stdev']
         if 'eval_after_epoch' in config['evaluation']:
             args.eval_after_epoch = config['evaluation']['eval_after_epoch']
         if 'epochs_between_evals' in config['evaluation']:
@@ -190,6 +222,7 @@ def LoadConfig(args, config):
     if 'checkpoint' in config:
         if 'checkpoint_folder' in config['checkpoint']:
             args.checkpoint_folder = config['checkpoint']['checkpoint_folder']
+            args.checkpoint_folder = args.checkpoint_folder.rstrip('/')
         if 'checkpoint_after_epoch' in config['checkpoint']:
             args.checkpoint_after_epoch = config['checkpoint']['checkpoint_after_epoch']
         if 'epochs_between_checkpoints' in config['checkpoint']:

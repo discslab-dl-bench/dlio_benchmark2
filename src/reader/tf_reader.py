@@ -1,5 +1,5 @@
 """
-   Copyright © 2022, UChicago Argonne, LLC
+   Copyright (c) 2022, UChicago Argonne, LLC
    All Rights Reserved
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,11 +18,10 @@ import math
 import logging
 from time import time
 
-from src.utils.utility import utcnow
+from src.utils.utility import utcnow, timeit
 from src.common.enumerations import Shuffle
 from src.reader.reader_handler import FormatReader
 import tensorflow as tf
-
 
 class TFReader(FormatReader):
     """
@@ -37,7 +36,7 @@ class TFReader(FormatReader):
 
     # TODO: DLIO assumes the tfrecord files to contain image/label pairs.
     # This is not always the case, e.g. in BERT, each record is more complex,
-    # consisting of 6 lists and a label. Same for DLRM. 
+    # consisting of 6 lists and a label. Same for DLRM.
     def _tf_parse_function(self, serialized):
         """
         performs deserialization of the tfrecord.
@@ -71,14 +70,22 @@ class TFReader(FormatReader):
         """
         # superclass function initializes the file list
         super().read(epoch_number)
-        dataset = tf.data.TFRecordDataset(filenames=self._file_list,
-                                          buffer_size=self.transfer_size,
-                                          num_parallel_reads=self.read_threads)
+        if self.read_threads==0:
+            if self._args.my_rank==0:
+                logging.warning(f"{utcnow()} `read_threads` is set to be 0 for tf.data loader. We change it to tf.data.AUTOTUNE")
+            self.read_threads=tf.data.AUTOTUNE
+        if (self.transfer_size !=None):
+            dataset = tf.data.TFRecordDataset(filenames=self._file_list,
+                                            buffer_size=self.transfer_size,
+                                            num_parallel_reads=self.read_threads)
+        else:
+            dataset = tf.data.TFRecordDataset(filenames=self._file_list,
+                                            num_parallel_reads=self.read_threads)            
         dataset = dataset.shard(num_shards=self.comm_size, index=self.my_rank)
         dataset = dataset.map(self._tf_parse_function, num_parallel_calls=self.computation_threads)
 
-        if self.memory_shuffle != Shuffle.OFF:
-            if self.memory_shuffle == Shuffle.SEED:
+        if self.sample_shuffle != Shuffle.OFF:
+            if self.sample_shuffle == Shuffle.SEED:
                 dataset = dataset.shuffle(buffer_size=self.shuffle_size,
                                           seed=self.seed)
             else:
@@ -87,7 +94,6 @@ class TFReader(FormatReader):
         
         if self.prefetch_size>0:
             self._dataset = dataset.prefetch(buffer_size=self.prefetch_size)
-            
 
     def next(self):
         """

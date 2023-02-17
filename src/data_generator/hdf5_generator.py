@@ -1,5 +1,5 @@
 """
-   Copyright © 2022, UChicago Argonne, LLC
+   Copyright (c) 2022, UChicago Argonne, LLC
    All Rights Reserved
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,18 +32,18 @@ class HDF5Generator(DataGenerator):
         super().__init__()
         self.chunk_size = self._args.chunk_size
         self.enable_chunking = self._args.enable_chunking
-
     def generate(self):
         """
         Generate hdf5 data for training. It generates a 3d dataset and writes it to file.
         """
         super().generate()
         samples_per_iter=1024
-        records = random.random((samples_per_iter, self._dimension, self._dimension))
+        dim1 = dim2 = self._dimension
+        records = random.random((samples_per_iter, dim1, dim2))
         record_labels = [0] * self.num_samples
         for i in range(self.my_rank, int(self.total_files_to_generate), self.comm_size):
             progress(i, self.total_files_to_generate, "Generating HDF5 Data")
-            out_path_spec = self._file_list[i]
+            out_path_spec = self.storage.get_uri(self._file_list[i])
             hf = h5py.File(out_path_spec, 'w')
             chunks = None
             if self.enable_chunking:
@@ -57,7 +57,7 @@ class HDF5Generator(DataGenerator):
                 compression = str(self.compression)
                 if self.compression == Compression.GZIP:
                     compression_level = self.compression_level
-            dset = hf.create_dataset('records', (self.num_samples,self._dimension, self._dimension), chunks=chunks, compression=compression,
+            dset = hf.create_dataset('records', (self.num_samples, dim1, dim2), chunks=chunks, compression=compression,
                                      compression_opts=compression_level)
             samples_written = 0
             while samples_written < self.num_samples:

@@ -1,5 +1,5 @@
 """
-   Copyright © 2022, UChicago Argonne, LLC
+   Copyright (c) 2022, UChicago Argonne, LLC
    All Rights Reserved
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -87,3 +87,27 @@ class Framework(ABC):
     @abstractmethod
     def get_reader(self, dataset_type):
         pass
+
+    @abstractmethod
+    def is_nativeio_available(self):
+        pass
+    # Metadata APIs
+    def create_node(self, id, exist_ok=False):
+        return False
+
+    def get_node(self, id):
+        return None
+
+    def walk_node(self, id, use_pattern=False):
+        return None
+
+    def delete_node(self, id):
+        return False
+
+    # Data APIs
+    def put_data(self, id, data, offset=None, length=None):
+        return False
+
+    def get_data(self, id, data, offset=None, length=None):
+        return None
+

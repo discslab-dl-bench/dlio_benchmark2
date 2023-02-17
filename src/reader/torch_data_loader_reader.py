@@ -1,5 +1,5 @@
 """
-   Copyright © 2022, UChicago Argonne, LLC
+   Copyright (c) 2022, UChicago Argonne, LLC
    All Rights Reserved
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@ import numpy as np
 from time import time
 import os
 
-from src.utils.utility import utcnow
+from src.utils.utility import utcnow, timeit
 
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -33,26 +33,26 @@ import torchvision.transforms as transforms
 import h5py
 
 totensor=transforms.ToTensor()
-### reading file of different formats. 
+
+### reading file of different formats.  resize is simple to keep the data uniform
 def read_jpeg(filename):
-    return totensor(Image.open(filename))
-
+    return totensor(Image.open(filename).resize((224, 224)))
 def read_png(filename):
-    return totensor(Image.open(filename))
-
+    return totensor(Image.open(filename).resize((224, 224)))
 def read_npz(filename):
-    return np.load(filename)
-
+    data = np.load(filename)
+    x = data['x']
+    y = data['y'] 
+    x.resize((224, 224), refcheck=False)
+    return x, y
 def read_hdf5(f):
     file_h5 = h5py.File(f, 'r')
     d = file_h5['records'][:,:,:]
     l = file_h5['labels'][:]
     return d, l
-
 def read_file(f):
     with open(f, mode='rb') as file: # b is important -> binary
-        fileContent = file.read()
-    return fileContent
+        return file.read()
 
 filereader={
     FormatType.JPEG: read_jpeg, 
@@ -77,7 +77,8 @@ class TorchDataset(Dataset):
             
         def __len__(self):
             return len(self.samples)
-        
+
+        @timeit
         def __getitem__(self, idx):
             logging.debug(f"{utcnow()} Rank {self.my_rank} reading {self.samples[idx]}")
             return self.read(self.samples[idx])
@@ -96,10 +97,11 @@ class TorchDataLoaderReader(FormatReader):
     def read(self, epoch_number):
         # superclass function shuffle the file list 
         super().read(epoch_number)
-        do_shuffle = True if self.memory_shuffle != Shuffle.OFF else False
-        
-        dataset = TorchDataset(self._file_list, self.my_rank, self.format)
-        
+        do_shuffle = True if self.sample_shuffle != Shuffle.OFF else False
+        if self._args.num_samples_per_file == 1:
+            dataset = TorchDataset(self._file_list, self.my_rank, self.format)
+        else:
+            raise Exception(f"Multiple sample per file is currently unsupported in PyTorch reader")
         # TODO: In image segmentation, the distributed sampler is not used during eval, we could parametrize this away if needed
         # This handles the partitioning between ranks
         sampler = DistributedSampler(dataset, 
@@ -115,7 +117,7 @@ class TorchDataLoaderReader(FormatReader):
             prefetch_factor = self.prefetch_size
         if prefetch_factor>0:
             if self.my_rank==0:
-                logging.info(f"{utcnow()} Prefetch size is {prefetch_size}; prefetch factor of {prefetch_factor} will be set to Torch DataLoader.")
+                logging.info(f"{utcnow()} Prefetch size is {self.prefetch_size}; prefetch factor of {prefetch_factor} will be set to Torch DataLoader.")
         else:
             if self.my_rank==0:
                 logging.info(f"{utcnow()} Prefetch size is 0; a default prefetch factor of 2 will be set to Torch DataLoader.")
@@ -133,7 +135,6 @@ class TorchDataLoaderReader(FormatReader):
         self._dataset.sampler.set_epoch(epoch_number)
         # Must set the epoch in DistributedSampler to ensure proper shuffling
         # https://pytorch.org/docs/stable/data.html#torch.utils.data.distributed.DistributedSampler
-
     def next(self):
         super().next()
         logging.debug(f"{utcnow()} Rank {self.my_rank} should read {len(self._dataset)} batches")

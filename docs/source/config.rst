@@ -16,28 +16,28 @@ The characteristics of a workload is specified through a YAML file. This file wi
     evaluation: True
 
   dataset: 
-    data_folder: ./data/unet3d/
+    data_folder: data/unet3d
     format: npz
-    num_files_train: 3620
+    num_files_train: 168
     num_files_eval: 42
     num_samples_per_file: 1
-    batch_size: 4
-    batch_size_eval: 1
-    file_access: multi
-    record_length: 1145359
+    record_length: 234560851
+    record_length_stdev: 109346892
     keep_files: True
   
-  data_reader: 
+  reader: 
     data_loader: pytorch
     read_threads: 4
     prefetch_size: 2
+    batch_size: 2
+    batch_size_eval: 1
 
   train:
     epochs: 10
-    computation_time: 4.59
+    computation_time: 0.753
 
   evaluation: 
-    eval_time: 11.572
+    eval_time: 5.8
     epochs_between_evals: 2
 
 A `DLIO` YAML configuration file contains following sections: 
@@ -46,7 +46,7 @@ A `DLIO` YAML configuration file contains following sections:
 * **framework** - specifying the framework to use for the benchmark, options: tensorflow, pytorch
 * **workflow** - specifying what workflow operations to perform. Workflow operations include: dataset generation (``generate_data``), training (``train``), evaluation (``evaluation``), checkpointing (``checkpoint``), debugging (``debug``), etc. 
 * **dataset** - specifying all the information related to the dataset. 
-* **data_reader** - specifying the data loading options 
+* **reader** - specifying the data loading options 
 * **train** - specifying the setup for training
 * **evaluation** - specifying the setup for evaluation. 
 * **checkpoint** - specifying the setup for checkpointing. 
@@ -117,6 +117,9 @@ dataset
    * - record_length
      - 65536
      - size of each sample
+   * - record_length_stdev
+     - 0.
+     - standard deviation of the size of samples
    * - format
      - tfrecord
      - data format [tfrecord|csv|npz|jpeg|png]
@@ -138,12 +141,6 @@ dataset
    * - num_subfolders_eval
      - 0
      - number of subfolders that the evaluation/validation set is stored
-   * - batch_size
-     - 1 
-     - batch size for training
-   * - batch_size_eval
-     - 1 
-     - batch size for evaluation
    * - file_prefix
      - img
      - the prefix of the dataset file(s)
@@ -167,7 +164,7 @@ dataset
   The training and validation datasets will be put in ```${data_folder}/train``` and ```${data_folder}/valid``` respectively. If ``num_subfolders_train`` and ``num_subfolders_eval`` are larger than one, the datasets will be split into multiple subfolders within ```${data_folder}/train``` and ```${data_folder}/valid```. 
 
 
-data_reader 
+reader 
 ------------------
 .. list-table:: 
    :widths: 15 10 30
@@ -179,6 +176,12 @@ data_reader
    * - data_loader*
      - tensorflow
      - select the data loader to use [tensorflow|pytorch|node]. 
+   * - batch_size
+     - 1 
+     - batch size for training
+   * - batch_size_eval
+     - 1 
+     - batch size for evaluation
    * - read_threads
      - 1
      - number of threads to load the data (for tensorflow and pytorch data loader)
@@ -188,14 +191,14 @@ data_reader
    * - prefetch_size
      - 0
      - number of batch to prefetch (0 - no prefetch at all)
-   * - read_shuffle
+   * - sample_shuffle
      - off
-     - [seed|random|off] whether and how to shuffle the dataset
-   * - file_access
-     - multi
-     - multi - file per process; shared - independent access to a single shared file; collective - collective I/O access to a single shared file
+     - [seed|random|off] whether and how to shuffle the dataset samples
+   * - file_shuffle
+     - off
+     - [seed|random|off] whether and how to shuffle the dataset file list
    * - transfer_size
-     - 1048576
+     - 262144
      - transfer size in byte for tensorflow data loader. 
 
 .. note:: 
@@ -220,6 +223,9 @@ train
    * - computation_time
      - 0.0
      - emulated computation time per step in second
+   * - computation_time_stdev
+     - 0.0
+     - standard deviation of the emulated computation time per step in second
    * - total_training_steps
      - -1
      - number of training steps to simulate, assuming running the benchmark less than one epoch. 
@@ -242,6 +248,9 @@ evaluation
    * - eval_time
      - 0
      - emulated computation time (sleep) for each evaluation step. 
+   * - eval_time_stdev
+     - 0
+     - standard deviation of the emulated computation time (sleep) for each evaluation step. 
    * - epochs_between_evals
      - 1
      - evaluate after x number of epochs

@@ -1,5 +1,5 @@
 """
-   Copyright © 2022, UChicago Argonne, LLC
+   Copyright (c) 2022, UChicago Argonne, LLC
    All Rights Reserved
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,6 @@
 import os
 import math
 import hydra
-import shutil
 import logging
 import pandas as pd
 from time import time
@@ -33,15 +32,16 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
 from dataclasses import dataclass
-from src.utils.utility import utcnow
+from src.utils.utility import utcnow, measure_performance
 from omegaconf import DictConfig, OmegaConf
 from src.utils.statscounter import StatsCounter
 from hydra.core.config_store import ConfigStore
 from src.utils.config import LoadConfig, ConfigArguments
-from src.common.enumerations import Profiler, DatasetType
+from src.common.enumerations import Profiler, DatasetType, StorageType
 from src.profiler.profiler_factory import ProfilerFactory
 from src.framework.framework_factory import FrameworkFactory
 from src.data_generator.generator_factory import GeneratorFactory
+from src.storage.storage_factory import StorageFactory
 
 
 class DLIOBenchmark(object):
@@ -60,8 +60,6 @@ class DLIOBenchmark(object):
         </ul>
         """
         self.args = ConfigArguments.get_instance()
-        
-
         LoadConfig(self.args, cfg)
         self.args.validate()
         try:
@@ -69,23 +67,20 @@ class DLIOBenchmark(object):
             self.args.output_folder = hydra_cfg['runtime']['output_dir']
         except:
             self.args.output_folder = 'output/'
-
         self.output_folder = self.args.output_folder
-        
         self.logfile = os.path.join(self.output_folder, self.args.log_file)
-
         self.data_folder = self.args.data_folder
-        self.output_folder = self.args.output_folder
         os.makedirs(self.output_folder, exist_ok=True)
-        os.makedirs(self.data_folder, exist_ok=True)
+        self.storage_root = self.args.storage_root
+        self.storage = StorageFactory().get_storage(self.args.storage_type, self.storage_root, self.args.framework)
+        if self.args.storage_root:
+            self.storage.create_namespace(exist_ok=True)
 
         self.framework = FrameworkFactory().get_framework(self.args.framework,
                                                           self.args.do_profiling)
 
         self.my_rank = self.args.my_rank = self.framework.rank()
         self.comm_size = self.args.comm_size = self.framework.size()
-
-
         # Delete previous logfile
         if self.my_rank == 0:
             if os.path.isfile(self.logfile):
@@ -121,6 +116,9 @@ class DLIOBenchmark(object):
         self.epochs = self.args.epochs
         self.batch_size = self.args.batch_size
         self.computation_time = self.args.computation_time
+        self.computation_time_stdev = self.args.computation_time_stdev
+
+
 
         if self.do_profiling:
             self.profiler = ProfilerFactory().get_profiler(self.args.profiler)
@@ -140,6 +138,7 @@ class DLIOBenchmark(object):
 
         self.batch_size_eval = self.args.batch_size_eval
         self.eval_time = self.args.eval_time
+        self.eval_time_stdev = self.args.eval_time_stdev        
         self.eval_after_epoch = self.args.eval_after_epoch
         self.epochs_between_evals = self.args.epochs_between_evals
 
@@ -186,7 +185,8 @@ class DLIOBenchmark(object):
                 logging.info(f"{utcnow()} Profiling Started with {self.args.profiler}")
         self.framework.init_reader(self.args.format, self.args.data_loader)
         self.framework.barrier()
-
+        self.total_compute_time = 0.0
+    
     def _eval(self, epoch):
         """
         Evaluation loop will read a separate dataset and has its own own computation time.
@@ -194,23 +194,33 @@ class DLIOBenchmark(object):
         step = 1
         total = math.floor(self.num_samples * self.num_files_eval / self.batch_size_eval / self.comm_size)
         t0 = time() 
-        for batch in self.framework.get_reader(DatasetType.VALID).next():
+        reader = self.framework.get_reader(DatasetType.VALID)
+        total_compute_time = 0.0
+        start_time = time()
+        for batch in reader.next():
             self.stats.eval_batch_loaded(epoch, step, t0)
 
             if self.eval_time > 0:
-                self.framework.compute(epoch, step, self.eval_time)
+                if self.eval_time_stdev > 0:
+                    eval_time = random.normal(self.eval_time, self.eval_time_stdev)
+                else:
+                    eval_time = self.eval_time
+                total_compute_time += eval_time
+                self.framework.compute(epoch, step, eval_time)
 
             self.stats.eval_batch_processed(epoch, step, t0)
 
             step += 1
             if step > total:
-                return step - 1
+                break
                 
             self.framework.barrier()
             t0 = time()
-
+        end_time = time()
+        self.total_compute_time += total_compute_time
+        if self.my_rank == 0 and total_compute_time >0.:            
+            logging.info(f"{utcnow()} Epoch {epoch} [evaluation] accelerator_under_utilization: {(end_time - start_time - total_compute_time) / total_compute_time}")
         return step - 1
-
     def _train(self, epoch):
         """
         Training loop for reading the dataset and performing training computations.
@@ -219,11 +229,15 @@ class DLIOBenchmark(object):
         block = 1   # A continuous period of training steps, ended by checkpointing
         block_step = overall_step = 1   # Steps are taken within blocks
         max_steps = math.floor(self.num_samples * self.num_files_train / self.batch_size / self.comm_size)
-
         # Start the very first block
         self.stats.start_block(epoch, block)
         t0 = time()
-        for batch in self.framework.get_reader(dataset_type=DatasetType.TRAIN).next():
+        reader = self.framework.get_reader(dataset_type=DatasetType.TRAIN)
+
+        total_compute_time = 0.0
+        start_time = time()
+        for batch in reader.next():
+            logging.debug(f"{utcnow()} Rank {self.my_rank} batch: {batch[:][1:]}")
             self.stats.batch_loaded(epoch, overall_step, block, t0)
             self.framework.barrier()
             # Log a new block, unless it's the first one which we've already logged before the loop
@@ -231,7 +245,13 @@ class DLIOBenchmark(object):
                 self.stats.start_block(epoch, block)
             
             if self.computation_time > 0:
-                self.framework.compute(epoch, block_step, self.computation_time)
+                self.framework.trace_object("Train", overall_step, 1)
+                if self.computation_time_stdev > 0:
+                    computation_time = random.normal(self.computation_time, self.computation_time_stdev)
+                else:
+                    computation_time = self.computation_time
+                total_compute_time += computation_time
+                self.framework.compute(epoch, block_step, computation_time)
             self.framework.barrier()
 
             self.stats.batch_processed(epoch, overall_step, block, t0)
@@ -261,7 +281,6 @@ class DLIOBenchmark(object):
             overall_step += 1
             t0 = time()
 
-
         if self.do_checkpoint and (self.steps_between_checkpoints < 0) and (epoch == self.next_checkpoint_epoch):
             self.stats.end_block(epoch, block, block_step)
             self.stats.start_ckpt(epoch, block, overall_step)
@@ -269,15 +288,19 @@ class DLIOBenchmark(object):
             self.stats.end_ckpt(epoch, block)
             self.framework.barrier()
             self.next_checkpoint_epoch += self.epochs_between_checkpoints
+        end_time = time()
+        self.total_compute_time += total_compute_time
+        if self.my_rank == 0 and total_compute_time >0.0:            
+            logging.info(f"{utcnow()} Epoch {epoch} [training] accelerator_under_utilization: {(end_time - start_time - total_compute_time) / total_compute_time}")
         return overall_step
 
-    
     def run(self):
         """
         Run the total epochs for training. 
         On each epoch, it prepares dataset for reading, it trains, and finalizes the dataset.
         If evaluation is enabled, it reads the eval dataset, performs evaluation and finalizes.
         """
+        self.start_timestamp=time()
         if not self.generate_only:
             # Print out the expected number of steps for each epoch and evaluation
             if self.my_rank == 0:
@@ -324,7 +347,7 @@ class DLIOBenchmark(object):
 
                     self.framework.barrier()
                     self.framework.get_reader(DatasetType.VALID).finalize()
-
+        self.stop_timestamp=time()
     def finalize(self):
         """
         It finalizes the dataset once training is completed.
@@ -341,17 +364,22 @@ class DLIOBenchmark(object):
                 logging.info(f"{utcnow()} Keep files set to False. Deleting dataset")
                 self.framework.barrier()
                 if self.my_rank == 0:
-                    if os.path.exists(self.args.data_folder):
-                        shutil.rmtree(self.args.data_folder)
+                    if self.storage.get_node(self.args.data_folder):
+                        self.storage.delete_node(self.args.data_folder)
                         logging.info(f"{utcnow()} Deleted data files")
             
             # Save collected stats to disk
             self.stats.save_data()
-        if self.my_rank==0:
-            logging.info(f"{utcnow()} Saved outputs in {self.output_folder}")
         self.framework.barrier()
+        total_elapsed_time = self.stop_timestamp - self.start_timestamp
 
+        if self.my_rank == 0 and self.total_compute_time >0.:            
+            logging.info(f"{utcnow()} Overall accelerator_under_utilization: {(total_elapsed_time - self.total_compute_time) / self.total_compute_time}")
+ 
+        if self.my_rank==0:
+            logging.info(f"{utcnow()} Saved outputs in {self.output_folder}")        
 
+@measure_performance
 @hydra.main(version_base=None, config_path="../configs", config_name="config")
 def main(cfg : DictConfig) -> None:
     """
