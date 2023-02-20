@@ -20,7 +20,7 @@ import hydra
 import random
 import logging
 import pandas as pd
-from time import time
+from time import time, sleep
 
 # Reduce TF and CUDA logging
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -113,6 +113,7 @@ class DLIOBenchmark(object):
         self.num_files_train = self.args.num_files_train
         self.num_samples = self.args.num_samples_per_file
         self.total_training_steps = self.args.total_training_steps
+        self.num_eval_steps = self.args.num_eval_steps
         
         self.epochs = self.args.epochs
         self.batch_size = self.args.batch_size
@@ -193,7 +194,11 @@ class DLIOBenchmark(object):
         Evaluation loop will read a separate dataset and has its own own computation time.
         """
         step = 1
-        total = math.floor(self.num_samples * self.num_files_eval / self.batch_size_eval / self.comm_size)
+
+        if self.num_eval_steps:
+            total= self.num_eval_steps
+        else:
+            total = math.floor(self.num_samples * self.num_files_eval / self.batch_size_eval / self.comm_size)
         t0 = time() 
         reader = self.framework.get_reader(DatasetType.VALID)
         total_compute_time = 0.0
@@ -222,6 +227,7 @@ class DLIOBenchmark(object):
         if self.my_rank == 0 and total_compute_time >0.:            
             logging.info(f"{utcnow()} Epoch {epoch} [evaluation] accelerator_under_utilization: {(end_time - start_time - total_compute_time) / total_compute_time}")
         return step - 1
+
     def _train(self, epoch):
         """
         Training loop for reading the dataset and performing training computations.
@@ -338,21 +344,22 @@ class DLIOBenchmark(object):
                 self.framework.barrier()
                 self.framework.get_reader(DatasetType.TRAIN).finalize()
 
-                # Perform evaluation if enabled
-                if self.do_eval and epoch >= next_eval_epoch:
-                    next_eval_epoch += self.epochs_between_evals
+                # We program BERT to perform an evluation once it's done training 
+                next_eval_epoch += self.epochs_between_evals
+                # Simulate shutting down and starting a new eval process
+                sleep(10)
 
-                    self.stats.start_eval(epoch)
+                self.stats.start_eval(epoch)
+            
+                # Initialize the eval dataset
+                self.framework.get_reader(DatasetType.VALID).read(epoch)
+                self.framework.barrier()
                 
-                    # Initialize the eval dataset
-                    self.framework.get_reader(DatasetType.VALID).read(epoch)
-                    self.framework.barrier()
-                    
-                    self._eval(epoch)
-                    self.stats.end_eval(epoch)
+                self._eval(epoch)
+                self.stats.end_eval(epoch)
 
-                    self.framework.barrier()
-                    self.framework.get_reader(DatasetType.VALID).finalize()
+                self.framework.barrier()
+                self.framework.get_reader(DatasetType.VALID).finalize()
 
         self.stop_timestamp=time()
 

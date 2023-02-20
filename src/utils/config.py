@@ -81,6 +81,7 @@ class ConfigArguments:
     eval_time: float = 0.0
     eval_time_stdev: float = 0.0
     eval_after_epoch: int = 1
+    num_eval_steps: int = None
     epochs_between_evals: int = 1
     model_size: int = 10240
     data_loader: DataLoaderType = DataLoaderType.TENSORFLOW
@@ -210,6 +211,8 @@ def LoadConfig(args, config):
             args.seed = config['train']['seed']
         
     if 'evaluation' in config:
+        if 'num_eval_steps' in config['evaluation']:
+            args.num_eval_steps = config['evaluation']['num_eval_steps']
         if 'eval_time' in config['evaluation']:
             args.eval_time = config['evaluation']['eval_time']
         if 'eval_time_stdev' in config['evaluation']:

@@ -74,26 +74,41 @@ class TFReader(FormatReader):
             if self._args.my_rank==0:
                 logging.warning(f"{utcnow()} `read_threads` is set to be 0 for tf.data loader. We change it to tf.data.AUTOTUNE")
             self.read_threads=tf.data.AUTOTUNE
-        if (self.transfer_size !=None):
-            dataset = tf.data.TFRecordDataset(filenames=self._file_list,
-                                            buffer_size=self.transfer_size,
-                                            num_parallel_reads=self.read_threads)
-        else:
-            dataset = tf.data.TFRecordDataset(filenames=self._file_list,
-                                            num_parallel_reads=self.read_threads)            
-        dataset = dataset.shard(num_shards=self.comm_size, index=self.my_rank)
-        dataset = dataset.map(self._tf_parse_function, num_parallel_calls=self.computation_threads)
 
+
+        # if (self.transfer_size !=None):
+        #     dataset = tf.data.TFRecordDataset(filenames=self._file_list,
+        #                                     buffer_size=self.transfer_size,
+        #                                     num_parallel_reads=self.read_threads)
+        # else:
+        #     dataset = tf.data.TFRecordDataset(filenames=self._file_list,
+        #                                     num_parallel_reads=self.read_threads)
+
+        dataset = tf.data.Dataset.from_tensor_slices(self._file_list)
+        
+        if len(self._file_list) > 1:
+            dataset = dataset.shard(num_shards=self.comm_size, index=self.my_rank)
+
+        dataset = dataset.shuffle(buffer_size=len(self._file_list))
+
+        dataset = dataset.interleave(
+            tf.data.TFRecordDataset,
+            cycle_length=self.computation_threads, 
+            num_parallel_calls=self.computation_threads
+        )
         if self.sample_shuffle != Shuffle.OFF:
             if self.sample_shuffle == Shuffle.SEED:
                 dataset = dataset.shuffle(buffer_size=self.shuffle_size,
                                           seed=self.seed)
             else:
                 dataset = dataset.shuffle(buffer_size=self.shuffle_size)
+
+        dataset = dataset.map(self._tf_parse_function, num_parallel_calls=self.computation_threads)
         self._dataset = dataset.batch(self.batch_size, drop_remainder=True)
         
-        if self.prefetch_size>0:
-            self._dataset = dataset.prefetch(buffer_size=self.prefetch_size)
+        # if self.prefetch_size>0:
+        #     self._dataset = dataset.prefetch(buffer_size=self.prefetch_size)
+
 
     def next(self):
         """
