@@ -127,6 +127,10 @@ class StatsCounter(object):
         if self.my_rank == 0:
             ts = utcnow()
             logging.info(f"{ts} Starting checkpoint {block} after total step {steps_taken} for epoch {epoch}")
+
+            if epoch not in self.per_epoch_stats:
+                self.per_epoch_stats[epoch] = {}
+                
             self.per_epoch_stats[epoch][f'ckpt{block}'] = {
                 'start': ts
             }

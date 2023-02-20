@@ -317,7 +317,14 @@ class DLIOBenchmark(object):
             self.next_checkpoint_epoch = self.checkpoint_after_epoch
 
             for epoch in range(1, self.epochs + 1):
-                self.next_checkpoint_step = self.steps_between_checkpoints                
+                self.next_checkpoint_step = self.steps_between_checkpoints
+
+                # BERT Always checkpoints at the very start
+                self.stats.start_ckpt(epoch, 0, 0)
+                self.framework.checkpoint(epoch, 0)
+                self.stats.end_ckpt(epoch, 0)
+                self.framework.barrier()
+
                 self.stats.start_epoch(epoch)
 
                 # Initialize the dataset
@@ -349,7 +356,7 @@ class DLIOBenchmark(object):
 
         self.stop_timestamp=time()
 
-        
+
     def finalize(self):
         """
         It finalizes the dataset once training is completed.

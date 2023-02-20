@@ -77,23 +77,23 @@ class TFFramework(Framework):
         """
         Performs Checkpointing for a specific step number. It writes different file of different sizes.
         """
-        if self.rank() == 0:
-            my_rank = self.rank()
-            if not self.storage.get_node(self.checkpoint_folder):
-                self.storage.create_node(self.checkpoint_folder)
+        # if self.rank() == 0:
+        my_rank = self.rank()
+        if not self.storage.get_node(self.checkpoint_folder):
+            self.storage.create_node(self.checkpoint_folder)
 
-            model_file = os.path.join(self.checkpoint_folder, f"model-{epoch}-{step_number}.bin")
-            meta_file = os.path.join(self.checkpoint_folder, f"meta-{epoch}-{step_number}.bin")
-            index_file = os.path.join(self.checkpoint_folder, f"index-{epoch}-{step_number}.bin")
+        model_file = os.path.join(self.checkpoint_folder, f"model-{epoch}-{step_number}_{my_rank}.bin")
+        meta_file = os.path.join(self.checkpoint_folder, f"meta-{epoch}-{step_number}_{my_rank}.bin")
+        index_file = os.path.join(self.checkpoint_folder, f"index-{epoch}-{step_number}_{my_rank}.bin")
 
-            string_val = "x" * self.args.model_size 
-            self.storage.put_data(model_file, string_val)
-            # TODO Should these scale with the model size?
-            string_val = "x" * (17371)
-            self.storage.put_data(index_file, string_val)
-            
-            string_val = "x" * (24740228)
-            self.storage.put_data(meta_file, string_val)
+        string_val = "x" * self.args.model_size 
+        self.storage.put_data(model_file, string_val)
+        # TODO Should these scale with the model size?
+        string_val = "x" * (17371)
+        self.storage.put_data(index_file, string_val)
+        
+        string_val = "x" * (24740228)
+        self.storage.put_data(meta_file, string_val)
 
     def compute(self, epoch_number, step, computation_time):
         tf.function(self.model)(epoch_number, step, computation_time)
