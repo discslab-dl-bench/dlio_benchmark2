@@ -222,6 +222,7 @@ class DLIOBenchmark(object):
         if self.my_rank == 0 and total_compute_time >0.:            
             logging.info(f"{utcnow()} Epoch {epoch} [evaluation] accelerator_under_utilization: {(end_time - start_time - total_compute_time) / total_compute_time}")
         return step - 1
+        
     def _train(self, epoch):
         """
         Training loop for reading the dataset and performing training computations.

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-IMAGE=${1:-dlio:loic}
+IMAGE=${1:-dlio:unet3d}
 
 docker run -it --rm \
     -v /raid/data/dlio/data:/workspace/dlio/data \
