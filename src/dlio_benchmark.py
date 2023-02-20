@@ -17,7 +17,6 @@
 import os
 import math
 import hydra
-import random
 import logging
 import pandas as pd
 from time import time
@@ -282,13 +281,6 @@ class DLIOBenchmark(object):
             overall_step += 1
             t0 = time()
 
-        if self.do_checkpoint and (self.steps_between_checkpoints < 0) and (epoch == self.next_checkpoint_epoch):
-            self.stats.end_block(epoch, block, block_step)
-            self.stats.start_ckpt(epoch, block, overall_step)
-            self.framework.checkpoint(epoch, overall_step)
-            self.stats.end_ckpt(epoch, block)
-            self.framework.barrier()
-            self.next_checkpoint_epoch += self.epochs_between_checkpoints
         end_time = time()
         self.total_compute_time += total_compute_time
         if self.my_rank == 0 and total_compute_time >0.0:            
@@ -317,14 +309,7 @@ class DLIOBenchmark(object):
             self.next_checkpoint_epoch = self.checkpoint_after_epoch
 
             for epoch in range(1, self.epochs + 1):
-                self.next_checkpoint_step = self.steps_between_checkpoints
-
-                # BERT Always checkpoints at the very start
-                self.stats.start_ckpt(epoch, 0, 0)
-                self.framework.checkpoint(epoch, 0)
-                self.stats.end_ckpt(epoch, 0)
-                self.framework.barrier()
-
+                self.next_checkpoint_step = self.steps_between_checkpoints                
                 self.stats.start_epoch(epoch)
 
                 # Initialize the dataset
@@ -334,6 +319,8 @@ class DLIOBenchmark(object):
                 steps = self._train(epoch)
                 self.stats.end_epoch(epoch, steps)
                 logging.debug(f"{utcnow()} Rank {self.my_rank} returned after {steps} steps.")
+
+
 
                 self.framework.barrier()
                 self.framework.get_reader(DatasetType.TRAIN).finalize()
@@ -354,9 +341,15 @@ class DLIOBenchmark(object):
                     self.framework.barrier()
                     self.framework.get_reader(DatasetType.VALID).finalize()
 
+            # UNET3D Checkpoints only at the very end
+            self.stats.start_ckpt(epoch, 0, steps)
+            self.framework.checkpoint(epoch, steps)
+            self.stats.end_ckpt(epoch, 0)
+            self.framework.barrier()
+
         self.stop_timestamp=time()
 
-
+        
     def finalize(self):
         """
         It finalizes the dataset once training is completed.

@@ -8,4 +8,4 @@ docker run -it --rm --name $CONTAINER_NAME \
     -v /raid/data/dlio/data:/workspace/dlio/data \
     -v /raid/data/dlio/run_output:/workspace/dlio/hydra_log \
     -v /raid/data/dlio/run_output:/workspace/dlio/checkpoints \
-    dlio:loic /bin/bash do_training.sh $WORKLOAD
+    dlio:$WORKLOAD /bin/bash do_training.sh $WORKLOAD
