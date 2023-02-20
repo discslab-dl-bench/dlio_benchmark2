@@ -17,6 +17,7 @@
 import os
 import math
 import hydra
+import random
 import logging
 import pandas as pd
 from time import time
@@ -327,8 +328,6 @@ class DLIOBenchmark(object):
                 self.stats.end_epoch(epoch, steps)
                 logging.debug(f"{utcnow()} Rank {self.my_rank} returned after {steps} steps.")
 
-
-
                 self.framework.barrier()
                 self.framework.get_reader(DatasetType.TRAIN).finalize()
 
@@ -347,7 +346,10 @@ class DLIOBenchmark(object):
 
                     self.framework.barrier()
                     self.framework.get_reader(DatasetType.VALID).finalize()
+
         self.stop_timestamp=time()
+
+        
     def finalize(self):
         """
         It finalizes the dataset once training is completed.

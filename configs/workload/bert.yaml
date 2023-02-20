@@ -7,6 +7,7 @@ workflow:
   train: True
   debug: False
   checkpoint: True
+  profiling: False
  
 dataset: 
   data_folder: data/bert
@@ -14,22 +15,21 @@ dataset:
   num_files_train: 500
   num_samples_per_file: 313532
   record_length: 2500
-  file_prefix: part
 
 train:
   computation_time: 0.968
-  total_training_steps: 5000
+  total_training_steps: 2400
  
 reader:
   data_loader: tensorflow
   read_threads: 1
   computation_threads: 1
   transfer_size: 262144
-  batch_size: 48
+  batch_size: 6
   file_shuffle: seed
   sample_shuffle: seed
 
 checkpoint:
   checkpoint_folder: checkpoints/bert
-  steps_between_checkpoints: 1250
+  steps_between_checkpoints: 2400
   model_size: 4034713312
