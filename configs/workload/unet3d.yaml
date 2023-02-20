@@ -28,10 +28,12 @@ reader:
 
 train:
   epochs: 50
-  computation_time: 1.3604
+  computation_time: 1.5315
+  computation_time_stdev: 0.334
 
 evaluation: 
-  eval_time: 9.5
+  eval_time: 8.9027
+  eval_time_stdev: 3.9049
   eval_after_epoch: 25
   epochs_between_evals: 25
 

@@ -20,6 +20,7 @@ import hydra
 import logging
 import pandas as pd
 from time import time
+from numpy import random
 
 # Reduce TF and CUDA logging
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -319,7 +320,6 @@ class DLIOBenchmark(object):
                 steps = self._train(epoch)
                 self.stats.end_epoch(epoch, steps)
                 logging.debug(f"{utcnow()} Rank {self.my_rank} returned after {steps} steps.")
-
 
 
                 self.framework.barrier()
