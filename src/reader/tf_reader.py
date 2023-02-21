@@ -96,6 +96,7 @@ class TFReader(FormatReader):
             cycle_length=self.computation_threads, 
             num_parallel_calls=self.computation_threads
         )
+
         if self.sample_shuffle != Shuffle.OFF:
             if self.sample_shuffle == Shuffle.SEED:
                 dataset = dataset.shuffle(buffer_size=self.shuffle_size,
