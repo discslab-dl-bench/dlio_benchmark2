@@ -5,7 +5,7 @@ framework: pytorch
 workflow:
   generate_data: False
   train: True
-  do_eval: True
+  profiling: False
 
 dataset: 
   data_folder: data/dlrm
@@ -32,3 +32,6 @@ train:
 evaluation: 
   eval_time: 0.0843
   steps_between_evals: 16384
+
+checkpoint:
+  model_size: 27129166561

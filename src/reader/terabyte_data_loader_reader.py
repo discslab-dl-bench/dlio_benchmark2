@@ -46,7 +46,7 @@ class TeraBinLoaderReader(FormatReader):
 
             self.num_entries = math.ceil(os.path.getsize(data_file) / self.bytes_per_entry)
 
-            print('data file:', data_file, 'number of batches:', self.num_entries)
+            # print('data file:', data_file, 'number of batches:', self.num_entries)
             self.file = open(data_file, 'rb')
 
         def __len__(self):
