@@ -12,5 +12,3 @@ docker run -it --rm --name $CONTAINER_NAME \
 	-v $LOGGING_DIR:/workspace/dlio/hydra_log \
 	-v /raid/data/dlio/run_output:/workspace/dlio/checkpoints \
     $IMAGE /bin/bash do_training.sh $WORKLOAD $NUM_GPUS $BATCH_SIZE
-
-	# -v /raid/data/dlrm_dlio2/dlio2:/workspace/dlio/data/dlrm \
