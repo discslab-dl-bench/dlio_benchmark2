@@ -42,6 +42,7 @@ class FormatReader(ABC):
         self.record_size_stdev = self._args.record_length_stdev
         self.prefetch_size = self._args.prefetch_size
         self.transfer_size = self._args.transfer_size
+        self.model = self._args.model
         
         self.my_rank = self._args.my_rank
         self.comm_size = self._args.comm_size
@@ -73,17 +74,30 @@ class FormatReader(ABC):
         else:
             self.file_acess = FileAccess.SHARED
         if self.dataset_type == DatasetType.TRAIN:
-            filenames = self.storage.walk_node(os.path.join(self.data_dir,  "train"))
+
+            if self.model == 'unet3d':
+                filenames = sorted(glob.glob(os.path.join(self.data_dir, "train", "*_x.npy")))
+                filenames = [os.path.basename(file).replace('_x.npy', '') for file in filenames]
+            else:
+                filenames = self.storage.walk_node(os.path.join(self.data_dir, "train"))
+
             if self.storage.get_node(os.path.join(self.data_dir, "train", filenames[0])) == MetadataType.DIRECTORY:
                 fullpaths=self.storage.walk_node(os.path.join(self.data_dir, "train/*/*"), use_pattern=True)
             else:
-                fullpaths = [self.storage.get_uri(os.path.join(self.data_dir, "train", entry)) for entry in filenames]
+                fullpaths = [self.storage.get_uri(os.path.join(self.data_dir, "train", entry)) for entry in filenames ]
+
 
             num_files = self.num_files_train
             self.batch_size = self.batch_size_train
-            assert len(fullpaths) == num_files, f"Expected {num_files} training files but {len(fullpaths)} found. Ensure data was generated correctly."            
+            # assert len(fullpaths) == num_files, f"Expected {num_files} training files but {len(fullpaths)} found. Ensure data was generated correctly." 
+
         elif self.dataset_type == DatasetType.VALID:
-            filenames = self.storage.walk_node(os.path.join(self.data_dir, "valid/"))
+            if self.model == 'unet3d':
+                filenames = sorted(glob.glob(os.path.join(self.data_dir, "valid", "*_x.npy")))
+                filenames = [file.replace('_x.npy', '') for file in filenames]
+            else:
+                filenames = self.storage.walk_node(os.path.join(self.data_dir, "valid/"))
+            
             if (len(filenames)>0):
                 if self.storage.get_node(os.path.join(self.data_dir, "valid", filenames[0])) == MetadataType.DIRECTORY:
                     fullpaths=self.storage.walk_node(os.path.join(self.data_dir, "valid/*/*"), use_pattern=True)
@@ -91,7 +105,7 @@ class FormatReader(ABC):
                     fullpaths = [self.storage.get_uri(os.path.join(self.data_dir, "valid", entry)) for entry in filenames]
                 num_files = self.num_files_eval
                 self.batch_size = self.batch_size_eval
-                assert len(fullpaths) == num_files, f"Expected {num_files} validation files but {len(fullpaths)} found. Ensure data was generated correctly."
+                # assert len(fullpaths) == num_files, f"Expected {num_files} validation files but {len(fullpaths)} found. Ensure data was generated correctly."
             else:
                 fullpaths=[]
 

@@ -51,6 +51,7 @@ class DataGenerator(ABC):
         self.format = self._args.format
         self.storage = StorageFactory().get_storage(self._args.storage_type, self._args.storage_root,
                                                                         self._args.framework)
+        self.model = self._args.model
 
     @abstractmethod
     def generate(self):
@@ -82,12 +83,19 @@ class DataGenerator(ABC):
         if self.num_subfolders_train > 1:
             ns = np.ceil(self.num_files_train / self.num_subfolders_train)
             for i in range(self.num_files_train):
-                file_spec = "{}/train/{}/{}_{}_of_{}.{}".format(self.data_dir, int(i//ns), self.file_prefix, i, self.num_files_train, self.format)
+                if self.model == 'unet3d':
+                    file_spec = "{}/train/{}/{}_{}_of_{}.{}".format(self.data_dir, int(i//ns), self.file_prefix, i, self.num_files_train, self.format)
+                else:
+                    file_spec = "{}/train/{}/{}_{}_of_{}.{}".format(self.data_dir, int(i//ns), self.file_prefix, i, self.num_files_train, self.format)
                 self._file_list.append(file_spec)
         else:
             for i in range(self.num_files_train):
-                file_spec = "{}/train/{}_{}_of_{}.{}".format(self.data_dir, self.file_prefix, i, self.num_files_train, self.format)
+                if self.model == 'unet3d':
+                    file_spec = "{}/train/case_{:05d}".format(self.data_dir, i, self.num_files_train)
+                else:
+                    file_spec = "{}/train/{}_{}_of_{}.{}".format(self.data_dir, self.file_prefix, i, self.num_files_train, self.format)
                 self._file_list.append(file_spec)
+
         if self.num_subfolders_eval > 1:
             ns = np.ceil(self.num_files_eval / self.num_subfolders_eval)
             for i in range(self.num_files_eval):
@@ -95,5 +103,8 @@ class DataGenerator(ABC):
                 self._file_list.append(file_spec)
         else:
             for i in range(self.num_files_eval):
-                file_spec = "{}/valid/{}_{}_of_{}.{}".format(self.data_dir, self.file_prefix, i, self.num_files_eval, self.format)
+                if self.model == 'unet3d':
+                    file_spec = "{}/valid/case_{:05d}".format(self.data_dir, i, self.num_files_train)
+                else:
+                    file_spec = "{}/valid/{}_{}_of_{}.{}".format(self.data_dir, self.file_prefix, i, self.num_files_eval, self.format)
                 self._file_list.append(file_spec)  

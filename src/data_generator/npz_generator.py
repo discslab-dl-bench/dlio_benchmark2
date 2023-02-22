@@ -37,17 +37,27 @@ class NPZGenerator(DataGenerator):
         Generator for creating data in NPZ format of 3d dataset.
         """
         super().generate()
-        record_labels = [0] * self.num_samples
         for i in range(self.my_rank, int(self.total_files_to_generate), self.comm_size):
-            if (self._dimension_stdev>0):
-                dim1, dim2 = [max(int(d), 0) for d in random.normal( self._dimension, self._dimension_stdev, 2)]
-            else:
-                dim1 = dim2 = self._dimension
-            records = random.random((dim1, dim2, self.num_samples))
+            # if (self._dimension_stdev > 0):
+            #     dim1, dim2 = [max(int(d), 0) for d in random.normal( self._dimension, self._dimension_stdev, 2)]
+            # else:
+            #     dim1 = dim2 = self._dimension
+            # records = random.random((dim1, dim2, self.num_samples))
+            # out_path_spec = self.storage.get_uri(self._file_list[i])
+            # np.save(out_path_spec, x=records)
+
+            size1 = random.randint(128, 471)
+            size2 = random.randint(186, 444)
+            img = np.random.uniform(low=-2.340702, high=2.639792, size=(1, size1, size2, size2))
+            mask = np.random.randint(0, 2, size=(1, size1, size2, size2))
+            img = img.astype(np.float32)
+            mask = mask.astype(np.uint8)
+            
             out_path_spec = self.storage.get_uri(self._file_list[i])
+
+            fnx = f"{out_path_spec}_x.npy"
+            fny = f"{out_path_spec}_y.npy"
+            np.save(fnx, img)
+            np.save(fny, mask)
+
             progress(i+1, self.total_files_to_generate, "Generating NPZ Data")
-            prev_out_spec = out_path_spec
-            if self.compression != Compression.ZIP:
-                np.savez(out_path_spec, x=records, y=record_labels)
-            else:
-                np.savez_compressed(out_path_spec, x=records, y=record_labels)

@@ -39,17 +39,18 @@ def read_jpeg(filename):
     return totensor(Image.open(filename).resize((224, 224)))
 def read_png(filename):
     return totensor(Image.open(filename).resize((224, 224)))
+
 def read_npz(filename):
-    data = np.load(filename)
-    x = data['x']
-    y = data['y'] 
-    x.resize((224, 224), refcheck=False)
+    x = np.resize(np.load(f'{filename}_x.npy'), (224, 224))
+    y = np.resize(np.load(f'{filename}_y.npy'), (224, 224))
     return x, y
+
 def read_hdf5(f):
     file_h5 = h5py.File(f, 'r')
     d = file_h5['records'][:,:,:]
     l = file_h5['labels'][:]
     return d, l
+
 def read_file(f):
     with open(f, mode='rb') as file: # b is important -> binary
         return file.read()
