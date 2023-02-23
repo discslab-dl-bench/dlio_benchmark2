@@ -94,7 +94,7 @@ class FormatReader(ABC):
         elif self.dataset_type == DatasetType.VALID:
             if self.model == 'unet3d':
                 filenames = sorted(glob.glob(os.path.join(self.data_dir, "valid", "*_x.npy")))
-                filenames = [file.replace('_x.npy', '') for file in filenames]
+                filenames = [os.path.basename(file).replace('_x.npy', '') for file in filenames]
             else:
                 filenames = self.storage.walk_node(os.path.join(self.data_dir, "valid/"))
             
