@@ -21,7 +21,6 @@ reader:
   data_loader: terabyte
   batch_size: 2048
   batch_size_eval: 2048
-  sample_shuffle: random
 
 train:
   epochs: 1

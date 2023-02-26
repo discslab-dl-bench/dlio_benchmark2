@@ -76,8 +76,6 @@ class TeraBinLoaderReader(FormatReader):
         # superclass function initializes the file list
         super().read(epoch_number)
 
-        do_shuffle = True if self.sample_shuffle != Shuffle.OFF else False
-
         # There's only one training and valid file with shared file access.
         if self.dataset_type == DatasetType.TRAIN:
             dataset = self.TerabyteBinDataset(self._file_list[0], batch_size=self.batch_size, max_ind_range=10000000)
@@ -99,7 +97,7 @@ class TeraBinLoaderReader(FormatReader):
                 dataset,
                 batch_size=None,
                 batch_sampler=None,
-                shuffle=do_shuffle,
+                shuffle=False,
                 num_workers=0,
                 collate_fn=None,
                 pin_memory=False,
