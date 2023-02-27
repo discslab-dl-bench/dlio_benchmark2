@@ -93,8 +93,10 @@ class TFReader(FormatReader):
 
         dataset = dataset.interleave(
             tf.data.TFRecordDataset,
-            cycle_length=self.computation_threads, 
-            num_parallel_calls=self.computation_threads
+            cycle_length=8, 
+            num_parallel_calls=8,
+            block_length = 1,
+            deterministic=False
         )
 
         if self.sample_shuffle != Shuffle.OFF:
@@ -104,11 +106,10 @@ class TFReader(FormatReader):
             else:
                 dataset = dataset.shuffle(buffer_size=self.shuffle_size)
 
-        dataset = dataset.map(self._tf_parse_function, num_parallel_calls=self.computation_threads)
+        dataset = dataset.repeat()
+        dataset = dataset.map(self._tf_parse_function, num_parallel_calls=8)
         self._dataset = dataset.batch(self.batch_size, drop_remainder=True)
         
-        # if self.prefetch_size>0:
-        #     self._dataset = dataset.prefetch(buffer_size=self.prefetch_size)
 
 
     def next(self):

@@ -120,8 +120,6 @@ class DLIOBenchmark(object):
         self.computation_time = self.args.computation_time
         self.computation_time_stdev = self.args.computation_time_stdev
 
-
-
         if self.do_profiling:
             self.profiler = ProfilerFactory().get_profiler(self.args.profiler)
 
@@ -385,7 +383,8 @@ class DLIOBenchmark(object):
                         logging.info(f"{utcnow()} Deleted data files")
             
             # Save collected stats to disk
-            self.stats.save_data()
+            # self.stats.save_data()
+            
         self.framework.barrier()
         total_elapsed_time = self.stop_timestamp - self.start_timestamp
 

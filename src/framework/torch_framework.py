@@ -78,6 +78,7 @@ class TorchFramework(Framework):
 
     def trace_object(self, string, step, r):
         return DummyTraceObject(string, step, r)
+
     def checkpoint(self, epoch, step_number):
         if self.rank() == 0:
             """
@@ -92,6 +93,7 @@ class TorchFramework(Framework):
             string_val = "x" * self.args.model_size 
             f.write(string_val)
             f.close()
+
     def compute(self, epoch_number, step, computation_time):
         torch_sleep(computation_time)
 

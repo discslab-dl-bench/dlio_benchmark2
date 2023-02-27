@@ -5,7 +5,7 @@ CONTAINER_NAME=${2:-dlio_loic}
 LOGGING_DIR=${3:-"/raid/data/dlio/run_output"}
 IMAGE=${4:-dlio:bert}
 WORKLOAD=${5:-bert}
-BATCH_SIZE=${6:-2048}
+BATCH_SIZE=${6:-6}
 
 docker run -it --rm --name $CONTAINER_NAME \
 	-v /raid/data/dlio/data:/workspace/dlio/data \
