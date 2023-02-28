@@ -27,7 +27,7 @@ reader:
   sample_shuffle: seed
 
 train:
-  epochs: 50
+  epochs: 12
   computation_time: 1.5315
   computation_time_stdev: 0.334
 
