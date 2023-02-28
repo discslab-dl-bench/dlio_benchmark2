@@ -20,7 +20,7 @@ import hydra
 import random
 import logging
 import pandas as pd
-from time import time, sleep
+from time import time, sleep, perf_counter_ns
 
 # Reduce TF and CUDA logging
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -236,14 +236,18 @@ class DLIOBenchmark(object):
         max_steps = math.floor(self.num_samples * self.num_files_train / self.batch_size / self.comm_size)
         # Start the very first block
         self.stats.start_block(epoch, block)
-        t0 = time()
         reader = self.framework.get_reader(dataset_type=DatasetType.TRAIN)
 
         total_compute_time = 0.0
         start_time = time()
+
+        t_iter = t0 = perf_counter_ns()
         for batch in reader.next():
             logging.debug(f"{utcnow()} Rank {self.my_rank} batch: {batch[:][1:]}")
-            self.stats.batch_loaded(epoch, overall_step, block, t0)
+
+            logging.info(f'load_batch_mem {perf_counter_ns() - t0}')
+            t0 = perf_counter_ns()
+
             self.framework.barrier()
             # Log a new block, unless it's the first one which we've already logged before the loop
             if block_step == 1 and block != 1:
@@ -259,7 +263,11 @@ class DLIOBenchmark(object):
                 self.framework.compute(epoch, block_step, computation_time)
             self.framework.barrier()
 
-            self.stats.batch_processed(epoch, overall_step, block, t0)
+            logging.info(f'all_compute {perf_counter_ns() - t0}')
+            logging.info(f'step_end {perf_counter_ns() - t_iter}')
+
+
+            # self.stats.batch_processed(epoch, overall_step, block, t0)
 
 
             if self.do_checkpoint and (self.steps_between_checkpoints>=0) and overall_step == self.next_checkpoint_step:
@@ -284,7 +292,7 @@ class DLIOBenchmark(object):
                 break
                 
             overall_step += 1
-            t0 = time()
+            t_iter = t0 = perf_counter_ns()
 
         if self.do_checkpoint and (self.steps_between_checkpoints < 0) and (epoch == self.next_checkpoint_epoch):
             self.stats.end_block(epoch, block, block_step)
