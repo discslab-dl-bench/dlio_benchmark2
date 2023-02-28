@@ -15,7 +15,6 @@ dataset:
  num_samples_per_file: 313532
  record_length: 2500
 
-
 train:
  computation_time: 0.968
  total_training_steps: 5000

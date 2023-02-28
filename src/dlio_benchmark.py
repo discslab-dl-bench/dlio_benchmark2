@@ -16,10 +16,13 @@
 """
 import os
 import math
+import json
 import hydra
 import logging
 import pandas as pd
 from time import time
+from numpy import random
+
 
 # Reduce TF and CUDA logging
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -104,7 +107,8 @@ class DLIOBenchmark(object):
                 logging.info(f"{utcnow()} Reading YAML config file './configs/workload/{hydra_cfg.runtime.choices.workload}.yaml'" )
             except:
                 pass
-
+        
+        workload = hydra_cfg.runtime.choices.workload
         self.generate_only = self.args.generate_only
         self.do_profiling = self.args.do_profiling
 
@@ -116,9 +120,14 @@ class DLIOBenchmark(object):
         
         self.epochs = self.args.epochs
         self.batch_size = self.args.batch_size
-        self.computation_time = self.args.computation_time
-        self.computation_time_stdev = self.args.computation_time_stdev
 
+        self.num_gpus = self.args.num_gpus
+
+        with open(f'configs/sleep_times/{workload}.json', 'r') as infile:
+            sleep_times = json.load(infile)
+            self.computation_time = sleep_times[str(self.num_gpus)][str(self.batch_size)]['mean']
+            self.computation_time_stdev = sleep_times[str(self.num_gpus)][str(self.batch_size)]['std']
+            logging.info(f'Using sleep time config for {workload} with batch size {self.batch_size} and {self.num_gpus} GPUs: {self.computation_time} {self.computation_time_stdev}')
 
 
         if self.do_profiling:

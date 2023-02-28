@@ -2,6 +2,8 @@ model: dlrm
 
 framework: pytorch
 
+num_gpus: 4
+
 workflow:
   generate_data: False
   train: True
@@ -25,7 +27,7 @@ reader:
 train:
   epochs: 1
   computation_time: 0.064296
-  total_training_steps: 32768
+  total_training_steps: 1000
   total_eval_steps: 2048
 
 evaluation: 

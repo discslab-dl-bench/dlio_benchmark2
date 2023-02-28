@@ -1,11 +1,11 @@
 #!/bin/bash
 
-NUM_GPUS=${1:-8}
+NUM_GPUS=${1:-2}
 CONTAINER_NAME=${2:-dlio_loic}
 LOGGING_DIR=${3:-"/raid/data/dlio/run_output"}
 IMAGE=${4:-dlio:dlrm}
 WORKLOAD=${5:-dlrm}
-BATCH_SIZE=${6:-512}
+BATCH_SIZE=${6:-2048}
 
 docker run -it --rm --name $CONTAINER_NAME \
 	-v /raid/data/dlio/data:/workspace/dlio/data \

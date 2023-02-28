@@ -129,6 +129,9 @@ def LoadConfig(args, config):
         '''
         args.model = config['model']
 
+    if 'num_gpus' in config:
+        args.num_gpus = config['num_gpus']
+
     if 'storage' in config:
         if 'storage_type' in config['storage']:
             args.storage_type = StorageType(config['storage']['storage_type'])
