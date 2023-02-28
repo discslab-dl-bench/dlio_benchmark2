@@ -303,7 +303,8 @@ class DLIOBenchmark(object):
                 break
                 
             overall_step += 1
-            t_iter = t0 = perf_counter_ns()
+            # t_iter = t0 = perf_counter_ns()
+            t0 = time()
 
         if self.do_checkpoint and (self.steps_between_checkpoints < 0) and (epoch == self.next_checkpoint_epoch):
             self.stats.end_block(epoch, block, block_step)
