@@ -20,7 +20,9 @@ import hydra
 import random
 import logging
 import pandas as pd
+import json
 from time import time, sleep, perf_counter_ns
+from numpy import random
 
 # Reduce TF and CUDA logging
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -117,9 +119,16 @@ class DLIOBenchmark(object):
         
         self.epochs = self.args.epochs
         self.batch_size = self.args.batch_size
-        self.computation_time = self.args.computation_time
-        self.computation_time_stdev = self.args.computation_time_stdev
 
+        workload = hydra_cfg.runtime.choices.workload
+        self.num_gpus = self.args.num_gpus
+
+        with open(f'configs/sleep_times/{workload}.json', 'r') as infile:
+            sleep_times = json.load(infile)
+            self.computation_time = sleep_times[str(self.num_gpus)][str(self.batch_size)]['mean']
+            self.computation_time_stdev = sleep_times[str(self.num_gpus)][str(self.batch_size)]['std']
+            logging.info(f'Using sleep time config for {workload} with batch size {self.batch_size} and {self.num_gpus} GPUs: {self.computation_time} {self.computation_time_stdev}')
+        
         if self.do_profiling:
             self.profiler = ProfilerFactory().get_profiler(self.args.profiler)
 
@@ -265,7 +274,6 @@ class DLIOBenchmark(object):
             if self.my_rank == 0:
                 logging.info(f'all_compute {perf_counter_ns() - t0}')
                 logging.info(f'step_end {perf_counter_ns() - t_iter}')
-
 
             if self.do_checkpoint and (self.steps_between_checkpoints>=0) and overall_step == self.next_checkpoint_step:
                 self.stats.end_block(epoch, block, block_step)
