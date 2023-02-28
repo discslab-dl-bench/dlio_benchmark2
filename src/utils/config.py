@@ -130,6 +130,9 @@ def LoadConfig(args, config):
         if 'storage_root' in config['storage']:
             args.storage_root = config['storage']['storage_root']
 
+    if 'num_gpus' in config:
+        args.num_gpus = config['num_gpus']
+
     # dataset related settings
     if 'dataset' in config:
         if 'record_length' in config['dataset']:

@@ -9,6 +9,8 @@ workflow:
   evaluation: True
   profiling: False
 
+num_gpus: 8
+
 dataset: 
   data_folder: data/unet3d/
   format: npz
