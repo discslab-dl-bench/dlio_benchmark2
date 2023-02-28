@@ -243,10 +243,9 @@ class DLIOBenchmark(object):
 
         t_iter = t0 = perf_counter_ns()
         for batch in reader.next():
-            logging.debug(f"{utcnow()} Rank {self.my_rank} batch: {batch[:][1:]}")
-
-            logging.info(f'load_batch_mem {perf_counter_ns() - t0}')
-            t0 = perf_counter_ns()
+            if self.my_rank == 0:
+                logging.info(f'load_batch_mem {perf_counter_ns() - t0}')
+                t0 = perf_counter_ns()
 
             self.framework.barrier()
             # Log a new block, unless it's the first one which we've already logged before the loop
@@ -263,11 +262,9 @@ class DLIOBenchmark(object):
                 self.framework.compute(epoch, block_step, computation_time)
             self.framework.barrier()
 
-            logging.info(f'all_compute {perf_counter_ns() - t0}')
-            logging.info(f'step_end {perf_counter_ns() - t_iter}')
-
-
-            # self.stats.batch_processed(epoch, overall_step, block, t0)
+            if self.my_rank == 0:
+                logging.info(f'all_compute {perf_counter_ns() - t0}')
+                logging.info(f'step_end {perf_counter_ns() - t_iter}')
 
 
             if self.do_checkpoint and (self.steps_between_checkpoints>=0) and overall_step == self.next_checkpoint_step:
