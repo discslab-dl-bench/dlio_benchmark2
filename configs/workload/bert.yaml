@@ -20,7 +20,7 @@ dataset:
 
 train:
   computation_time: 0.968
-  total_training_steps: 600
+  total_training_steps: 2400
 
 evaluation:
   eval_time: 0.968
