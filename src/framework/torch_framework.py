@@ -19,6 +19,7 @@ from src.common.error_code import ErrorCodes
 from src.common.enumerations import FormatType, FrameworkType, DatasetType
 from src.framework.framework import Framework, DummyTraceObject
 
+from numpy import random
 import os
 import torch
 import functools
@@ -85,13 +86,29 @@ class TorchFramework(Framework):
             """
             if not os.path.exists(self.checkpoint_folder):
                 os.makedirs(self.checkpoint_folder)
-            my_rank = self.rank()
             model_file = os.path.join(self.checkpoint_folder, f"model-{epoch}-{step_number}.bin")
 
-            f = open(model_file, "w")
-            string_val = "x" * self.args.model_size 
-            f.write(string_val)
-            f.close()
+            data = "x" * self.args.model_size
+            total_written = 0
+            i = 0
+            with open(model_file, "w") as fd:
+                while total_written < len(data):
+                    remaining = len(data) - total_written
+
+                    if i % 2 == 0:
+                        amt_to_write = 1280
+                    else:
+                        # mean and std
+                        r = random.normal(2170231, 4459727)
+                        # min
+                        amt_to_write = min(remaining, max(64, int(r)))
+
+                    fd.write(data[total_written:total_written + amt_to_write])
+                    total_written += amt_to_write
+                    i += 1
+                    logging.info(f'writing out {amt_to_write} bytes - total {total_written}')
+
+
     def compute(self, epoch_number, step, computation_time):
         torch_sleep(computation_time)
 
