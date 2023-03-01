@@ -25,6 +25,8 @@ import functools
 import logging
 from src.utils.utility import utcnow
 
+from numpy import random
+
 from time import sleep
 
 from src.reader.reader_factory import ReaderFactory
@@ -78,7 +80,9 @@ class TorchFramework(Framework):
 
     def trace_object(self, string, step, r):
         return DummyTraceObject(string, step, r)
+    
     def checkpoint(self, epoch, step_number):
+
         if self.rank() == 0:
             """
             Performs Checkpointing for a specific step number. It writes different file of different sizes.
@@ -88,10 +92,28 @@ class TorchFramework(Framework):
             my_rank = self.rank()
             model_file = os.path.join(self.checkpoint_folder, f"model-{epoch}-{step_number}.bin")
 
-            f = open(model_file, "w")
-            string_val = "x" * self.args.model_size 
-            f.write(string_val)
-            f.close()
+            data = "x" * self.args.model_size
+            total_written = 0
+            i = 0
+            with open(model_file, "w") as fd:
+                while total_written < len(data):
+                    remaining = len(data) - total_written
+
+                    if i % 2 == 0:
+                        # 1st quartile
+                        amt_to_write = 7348
+                    else:
+                        # mean and std
+                        r = random.normal(517653535, 841116648)
+                        # min
+                        amt_to_write = min(remaining, max(98, int(r)))
+
+                    fd.write(data[total_written:total_written + amt_to_write])
+                    total_written += amt_to_write
+                    i += 1
+                    logging.info(f'writing out {amt_to_write} bytes - total {total_written}')
+
+
     def compute(self, epoch_number, step, computation_time):
         torch_sleep(computation_time)
 
