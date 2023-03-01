@@ -40,3 +40,4 @@ checkpoint:
   checkpoint_folder: checkpoints/bert
   steps_between_checkpoints: 2400
   model_size: 4034713312
+  

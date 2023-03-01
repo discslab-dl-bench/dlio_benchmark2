@@ -4,6 +4,8 @@ from src.common.enumerations import NamespaceType, MetadataType
 import os
 import glob
 import shutil
+import logging
+from time import sleep
 
 class FileStorage(DataStorage):
     """
@@ -18,7 +20,7 @@ class FileStorage(DataStorage):
 
     # Namespace APIs
     def create_namespace(self, exist_ok=False):
-        os.makedirs(self.namespace.name, exist_ok=exist_ok)
+        os.makedirs(self.namespace.name, exist_ok=True)
         return True
 
     def get_namespace(self):
@@ -26,7 +28,7 @@ class FileStorage(DataStorage):
 
     # Metadata APIs
     def create_node(self, id, exist_ok=False):
-        os.makedirs(self.get_uri(id), exist_ok=exist_ok)
+        os.makedirs(self.get_uri(id), exist_ok=True)
         return True
 
     def get_node(self, id=""):
@@ -50,10 +52,35 @@ class FileStorage(DataStorage):
         return True
 
     # TODO Handle partial read and writes
+    def write_ckpt(self, id, data, rank, offset=None, length=None):
+        total_written = 0
+
+        i = 0
+        with open(self.get_uri(id), "w") as fd:
+            
+            # loop and write out 4k then 8M like real BERT!
+            while total_written < len(data):
+                remaining = len(data) - total_written
+                if i % 2 == 0:
+                    end_idx = total_written + min(remaining, total_written + 4096)
+                    buf = data[total_written:end_idx]
+                else:
+                    end_idx = total_written + min(remaining, total_written + 8384512)
+                    buf = data[total_written:end_idx]
+
+                logging.info(f'writing out {end_idx - total_written} bytes - total {total_written}')
+                fd.write(buf)
+                sleep(0.5)
+                total_written = end_idx
+                i += 1
+
+        if rank != 0:
+            os.remove(self.get_uri(id))
+
     def put_data(self, id, data, offset=None, length=None):
         with open(self.get_uri(id), "w") as fd:
             fd.write(data)
-
+        
     def get_data(self, id, data, offset=None, length=None):
         with open(self.get_uri(id), "r") as fd:
             data = fd.read()

@@ -86,8 +86,12 @@ class TFFramework(Framework):
         meta_file = os.path.join(self.checkpoint_folder, f"meta-{epoch}-{step_number}_{my_rank}.bin")
         index_file = os.path.join(self.checkpoint_folder, f"index-{epoch}-{step_number}_{my_rank}.bin")
 
+        # 4096
+        # 8384512
+
         string_val = "x" * self.args.model_size 
-        self.storage.put_data(model_file, string_val)
+        self.storage.write_ckpt(model_file, string_val, my_rank)
+
         # TODO Should these scale with the model size?
         string_val = "x" * (17371)
         self.storage.put_data(index_file, string_val)
