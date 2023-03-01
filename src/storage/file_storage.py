@@ -61,21 +61,20 @@ class FileStorage(DataStorage):
             # loop and write out 4k then 8M like real BERT!
             while total_written < len(data):
                 remaining = len(data) - total_written
-                if i % 2 == 0:
-                    end_idx = total_written + min(remaining, total_written + 4096)
-                    buf = data[total_written:end_idx]
-                else:
-                    end_idx = total_written + min(remaining, total_written + 8384512)
-                    buf = data[total_written:end_idx]
 
-                logging.info(f'writing out {end_idx - total_written} bytes - total {total_written}')
+                if i % 2 == 0:
+                    amt_to_write = min(remaining, 4096)
+                else:
+                    amt_to_write = min(remaining, 8384512)
+
+                buf = data[total_written:total_written + amt_to_write]
+                total_written += amt_to_write
+
+                logging.info(f'writing out {amt_to_write} bytes - total {total_written}')
+                # sleep(0.5)
                 fd.write(buf)
-                sleep(0.5)
-                total_written = end_idx
                 i += 1
 
-        if rank != 0:
-            os.remove(self.get_uri(id))
 
     def put_data(self, id, data, offset=None, length=None):
         with open(self.get_uri(id), "w") as fd:
