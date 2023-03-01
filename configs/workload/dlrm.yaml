@@ -27,7 +27,7 @@ reader:
 train:
   epochs: 1
   computation_time: 0.064296
-  total_training_steps: 1000
+  total_training_steps: 32768
   total_eval_steps: 2048
 
 evaluation: 

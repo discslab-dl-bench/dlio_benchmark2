@@ -17,7 +17,7 @@
 import math
 import logging
 import numpy as np
-from time import time
+from time import perf_counter_ns, time
 import os
 
 from src.utils.utility import utcnow, timeit
@@ -139,7 +139,7 @@ class TorchDataLoaderReader(FormatReader):
         super().next()
         logging.debug(f"{utcnow()} Rank {self.my_rank} should read {len(self._dataset)} batches")
 
-        for batch in self._dataset:   
+        for batch in self._dataset:
             yield batch
 
     def finalize(self):
