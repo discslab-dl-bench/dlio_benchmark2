@@ -3,7 +3,7 @@
 NUM_GPUS=${1:-8}
 CONTAINER_NAME=${2:-dlio_loic}
 LOGGING_DIR=${3:-"/raid/data/dlio/run_output"}
-IMAGE=${4:-dlio:bert}
+IMAGE=${4:-dlio:bert-instru}
 WORKLOAD=${5:-bert}
 BATCH_SIZE=${6:-6}
 
