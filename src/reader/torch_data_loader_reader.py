@@ -17,7 +17,7 @@
 import math
 import logging
 import numpy as np
-from time import time
+from time import perf_counter_ns, time
 import os
 
 from src.utils.utility import utcnow, timeit
@@ -136,12 +136,17 @@ class TorchDataLoaderReader(FormatReader):
         self._dataset.sampler.set_epoch(epoch_number)
         # Must set the epoch in DistributedSampler to ensure proper shuffling
         # https://pytorch.org/docs/stable/data.html#torch.utils.data.distributed.DistributedSampler
+
     def next(self):
         super().next()
         logging.debug(f"{utcnow()} Rank {self.my_rank} should read {len(self._dataset)} batches")
 
-        for batch in self._dataset:   
+        t0 = perf_counter_ns()
+        for batch in self._dataset:
+            if self.my_rank == 0:
+                logging.info(f"load_batch_inner {perf_counter_ns() - t0}")
             yield batch
+            t0 = perf_counter_ns()
 
     def finalize(self):
         pass
