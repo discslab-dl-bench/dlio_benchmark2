@@ -1,5 +1,6 @@
 import math
 import logging
+from time import perf_counter_ns
 import numpy as np
 
 from src.utils.utility import utcnow
