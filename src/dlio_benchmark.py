@@ -245,15 +245,15 @@ class DLIOBenchmark(object):
         self.stats.start_block(epoch, block)
         reader = self.framework.get_reader(dataset_type=DatasetType.TRAIN)
 
-        t0 = time()
-        # t_iter = t0 = perf_counter_ns()
+        # t0 = time()
+        t_iter = t0 = perf_counter_ns()
         for batch in reader.next():
 
-            # if self.my_rank == 0:
-            #     logging.info(f'load_batch_mem {perf_counter_ns() - t0}')
-            #     t0 = perf_counter_ns() 
-            logging.debug(f"{utcnow()} Rank {self.my_rank} batch: {batch[:][1:]}")
-            self.stats.batch_loaded(epoch, overall_step, block, t0)
+            if self.my_rank == 0:
+                logging.info(f'load_batch_mem {perf_counter_ns() - t0}')
+                t0 = perf_counter_ns() 
+            # logging.debug(f"{utcnow()} Rank {self.my_rank} batch: {batch[:][1:]}")
+            # self.stats.batch_loaded(epoch, overall_step, block, t0)
 
             self.framework.barrier()
             # Log a new block, unless it's the first one which we've already logged before the loop
@@ -269,10 +269,10 @@ class DLIOBenchmark(object):
                 self.framework.compute(epoch, block_step, computation_time)
             self.framework.barrier()
 
-            self.stats.batch_processed(epoch, overall_step, block, t0)
-            # if self.my_rank == 0:
-            #     logging.info(f'all_compute {perf_counter_ns() - t0}')
-            #     logging.info(f'step_end {perf_counter_ns() - t_iter}')
+            # self.stats.batch_processed(epoch, overall_step, block, t0)
+            if self.my_rank == 0:
+                logging.info(f'all_compute {perf_counter_ns() - t0}')
+                logging.info(f'step_end {perf_counter_ns() - t_iter}')
 
 
             # Perform evaluation during epochs if required
@@ -323,8 +323,8 @@ class DLIOBenchmark(object):
                 break
 
             overall_step += 1
-            t0 = time()
-            # t_iter = t0 = perf_counter_ns()
+            # t0 = time()
+            t_iter = t0 = perf_counter_ns()
 
         if self.do_checkpoint and (self.steps_between_checkpoints < 0) and (epoch == self.next_checkpoint_epoch):
             self.stats.end_block(epoch, block, block_step)

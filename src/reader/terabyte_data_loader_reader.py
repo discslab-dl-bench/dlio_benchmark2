@@ -118,8 +118,12 @@ class TeraBinLoaderReader(FormatReader):
         # dataset = self._dataset
         logging.debug(f"{utcnow()} Rank {self.my_rank} should read {len(self._dataset)} batches")
 
+        t0 = perf_counter_ns()
         for batch in self._dataset:
+            if self.my_rank == 0:
+                logging.info(f"load_batch_inner {perf_counter_ns() - t0}")
             yield batch
+            t0 = perf_counter_ns()
 
     def finalize(self):
         pass
