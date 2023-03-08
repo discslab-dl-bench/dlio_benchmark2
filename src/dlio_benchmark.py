@@ -248,7 +248,7 @@ class DLIOBenchmark(object):
         reader = self.framework.get_reader(dataset_type=DatasetType.TRAIN)
 
         total_compute_time = 0.0
-        # t0 = start_time = time()
+        start_time = time()
 
         t_iter = t0 = perf_counter_ns()
         for batch in reader.next():
