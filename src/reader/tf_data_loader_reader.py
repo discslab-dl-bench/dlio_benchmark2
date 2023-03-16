@@ -121,6 +121,7 @@ class TFDataLoaderReader(FormatReader):
         
         if self.prefetch_size > 0:
             self._dataset = self._dataset.prefetch(buffer_size=self.prefetch_size)
+
     def next(self):
         """
         Provides the iterator over tfrecord data pipeline.
