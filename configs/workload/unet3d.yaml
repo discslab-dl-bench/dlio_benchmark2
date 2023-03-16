@@ -29,14 +29,14 @@ reader:
   sample_shuffle: seed
 
 train:
-  epochs: 12
+  epochs: 25
   computation_time: 1.5315
   computation_time_stdev: 0.334
 
 evaluation: 
   eval_time: 8.9027
   eval_time_stdev: 3.9049
-  eval_after_epoch: 25
+  eval_after_epoch: 26
   epochs_between_evals: 25
 
 checkpoint:
