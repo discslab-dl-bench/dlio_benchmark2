@@ -31,6 +31,8 @@ from src.reader.reader_handler import FormatReader
 from PIL import Image
 import torchvision.transforms as transforms
 import h5py
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
 
 totensor=transforms.ToTensor()
 
@@ -41,8 +43,12 @@ def read_png(filename):
     return totensor(Image.open(filename).resize((224, 224)))
 
 def read_npz(filename):
+    t0 = perf_counter_ns()
     x = np.resize(np.load(f'{filename}_x.npy'), (224, 224))
     y = np.resize(np.load(f'{filename}_y.npy'), (224, 224))
+
+    if comm.rank == 0:
+        logging.info(f"load_sample {perf_counter_ns() - t0}")
     return x, y
 
 def read_hdf5(f):
