@@ -44,11 +44,17 @@ def read_png(filename):
 
 def read_npz(filename):
     t0 = perf_counter_ns()
-    x = np.resize(np.load(f'{filename}_x.npy'), (224, 224))
-    y = np.resize(np.load(f'{filename}_y.npy'), (224, 224))
+    x = np.load(f'{filename}_x.npy')
+    y = np.load(f'{filename}_y.npy')
+    if comm.rank == 0:
+        logging.info(f"sample_load {perf_counter_ns() - t0}")
+    
+    t0 = perf_counter_ns()
+    x = np.resize(x, (224, 224))
+    y = np.resize(y, (224, 224))
 
     if comm.rank == 0:
-        logging.info(f"load_sample {perf_counter_ns() - t0}")
+        logging.info(f"sample_preproc {perf_counter_ns() - t0}")
     return x, y
 
 def read_hdf5(f):
