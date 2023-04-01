@@ -18,6 +18,14 @@ from shutil import copyfile
 Generator for creating data in BIN format.
 """
 
+
+CATEGORY_RANGES = [10000000,    38985,    17278,     7418,    20242,        3,
+           7120,     1543,       63,  9999978,  2642264,   397262,
+             10,     2208,    11931,      155,        4,      976,
+             14, 10000000,  9832963, 10000000,   573162,    12969,
+            108,       36]
+
+
 class BINGenerator(DataGenerator):
     def __init__(self):
         super().__init__()
@@ -40,7 +48,7 @@ class BINGenerator(DataGenerator):
                 for k in range(0, parts):
                     num_written = segment_size if k < parts-1 else num_instance - k*segment_size
                     X_int = np.random.randint(2557264, size = (num_written, 13))
-                    X_cat = np.random.randint(8831335, size = (num_written, 26))
+                    X_cat = np.random.randint(0, CATEGORY_RANGES, size = (num_instance, 26))
                     y = np.random.randint(2, size=num_written)
                     np_data = np.concatenate([y.reshape(-1, 1), X_int, X_cat], axis=1)
                     np_data = np_data.astype(np.int32)
@@ -70,7 +78,7 @@ class BINGenerator(DataGenerator):
                 for k in range(0, parts):
                     num_written = segment_size if k < parts-1 else num_instance - k*segment_size
                     X_int = np.random.randint(2557264, size = (num_written, 13))
-                    X_cat = np.random.randint(8831335, size = (num_written, 26))
+                    X_cat = np.random.randint(0, CATEGORY_RANGES, size = (num_instance, 26))
                     y = np.random.randint(2, size=num_written)
                     np_data = np.concatenate([y.reshape(-1, 1), X_int, X_cat], axis=1)
                     np_data = np_data.astype(np.int32)

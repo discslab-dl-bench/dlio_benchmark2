@@ -123,12 +123,21 @@ class DLIOBenchmark(object):
 
         self.num_gpus = self.args.num_gpus
 
-        with open(f'configs/sleep_times/{workload}.json', 'r') as infile:
-            sleep_times = json.load(infile)
-            self.computation_time = sleep_times[str(self.num_gpus)][str(self.batch_size)]['mean']
-            self.computation_time_stdev = sleep_times[str(self.num_gpus)][str(self.batch_size)]['std']
-            logging.info(f'Using sleep time config for {workload} with batch size {self.batch_size} and {self.num_gpus} GPUs: {self.computation_time} {self.computation_time_stdev}')
 
+
+        def get_dlrm_compute_time(batch_size):
+            # Fitting lin reg batches and mus:
+            #     	slope: 1.5067222284653297e-06*batch + 0.02252012929280226
+            #     	R: 0.9416433814439628, P: 1.093003181515688e-16
+            # Fitting lin reg to batches and stds:
+            #     	slope: 6.460808729358035e-08*batch + -0.0001192373671573101
+            #     	R: 0.807393946380492, P: 7.9408040301846e-09
+            compute_time = 1.5067222284653297e-06 * batch_size + 0.02252012929280226
+            std_dev = 6.460808729358035e-08 * batch_size - 0.0001192373671573101
+            return compute_time, std_dev
+
+        self.computation_time, self.computation_time_stdev = get_dlrm_compute_time(self.batch_size)
+        logging.info(f'Using sleep time config for {workload} with batch size {self.batch_size} and {self.num_gpus} GPUs: {self.computation_time} {self.computation_time_stdev}')
 
         if self.do_profiling:
             self.profiler = ProfilerFactory().get_profiler(self.args.profiler)
