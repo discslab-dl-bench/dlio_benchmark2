@@ -120,12 +120,13 @@ class DLIOBenchmark(object):
         workload = hydra_cfg.runtime.choices.workload
         self.num_gpus = self.args.num_gpus
 
-        with open(f'configs/sleep_times/{workload}.json', 'r') as infile:
-            sleep_times = json.load(infile)
-            self.computation_time = sleep_times[str(self.num_gpus)][str(self.batch_size)]['mean']
-            self.computation_time_stdev = sleep_times[str(self.num_gpus)][str(self.batch_size)]['std']
-            logging.info(f'Using sleep time config for {workload} with batch size {self.batch_size} and {self.num_gpus} GPUs: {self.computation_time} {self.computation_time_stdev}')
+        def get_compute_time(batch_size):
+            compute_time = 0.2746153775392209 * batch_size + 0.2850517992610824
+            std_dev = 0.00790564357241069 * batch_size - 0.009242273674232346
+            return compute_time, std_dev
 
+        self.computation_time, self.computation_time_stdev = get_compute_time(self.batch_size)
+        logging.info(f'Using sleep time config for {workload} with batch size {self.batch_size} and {self.num_gpus} GPUs: {self.computation_time} {self.computation_time_stdev}')
 
         if self.do_profiling:
             self.profiler = ProfilerFactory().get_profiler(self.args.profiler)
