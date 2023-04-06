@@ -123,11 +123,31 @@ class DLIOBenchmark(object):
         workload = hydra_cfg.runtime.choices.workload
         self.num_gpus = self.args.num_gpus
 
-        with open(f'configs/sleep_times/{workload}.json', 'r') as infile:
-            sleep_times = json.load(infile)
-            self.computation_time = sleep_times[str(self.num_gpus)][str(self.batch_size)]['mean']
-            self.computation_time_stdev = sleep_times[str(self.num_gpus)][str(self.batch_size)]['std']
-            logging.info(f'Using sleep time config for {workload} with batch size {self.batch_size} and {self.num_gpus} GPUs: {self.computation_time} {self.computation_time_stdev}')
+        # with open(f'configs/sleep_times/{workload}.json', 'r') as infile:
+        #     sleep_times = json.load(infile)
+        #     self.computation_time = sleep_times[str(self.num_gpus)][str(self.batch_size)]['mean']
+        #     self.computation_time_stdev = sleep_times[str(self.num_gpus)][str(self.batch_size)]['std']
+
+# Fitting lin reg batches and mus:
+#         slope: 0.11793859464285715*batch + 0.3542615875000001
+#         R: 0.9932190584127545, P: 2.8089126547670595e-18
+# Fitting lin reg to batches and stds:
+#         slope: -5.0575459926914536e-05*batch + 0.025972095889324642
+#         R: -0.005192301929361682, P: 0.9826668995480724
+# Fitting lin reg gpus and mus:
+#         slope: 0.006049634642857132*gpus + 0.795767792857143
+#         R: 0.08055421083182245, P: 0.7356628320140554
+# Fitting lin reg to gpus and stds:
+#         slope: 0.004266428299756262*gpus + 0.004437652550835669
+#         R: 0.6925554533649527, P: 0.000713525794800337
+
+        def get_sleep_time(num_gpus, batch_size):
+            sleep_time_mean =  0.11793859464285715 * batch_size + 0.3542615875000001
+            sleep_time_std =  0.004266428299756262 * num_gpus + 0.004437652550835669
+            return sleep_time_mean, sleep_time_std
+
+        self.computation_time, self.computation_time_stdev = get_sleep_time(self.num_gpus, self.batch_size)
+        logging.info(f'Using sleep time config for {workload} with batch size {self.batch_size} and {self.num_gpus} GPUs: {self.computation_time} {self.computation_time_stdev}')
         
         if self.do_profiling:
             self.profiler = ProfilerFactory().get_profiler(self.args.profiler)
