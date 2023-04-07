@@ -21,6 +21,7 @@ import hydra
 import logging
 import pandas as pd
 from time import time, perf_counter_ns
+import numpy as np
 from numpy import random
 
 
@@ -45,6 +46,8 @@ from src.profiler.profiler_factory import ProfilerFactory
 from src.framework.framework_factory import FrameworkFactory
 from src.data_generator.generator_factory import GeneratorFactory
 from src.storage.storage_factory import StorageFactory
+
+
 
 
 class DLIOBenchmark(object):
@@ -124,17 +127,18 @@ class DLIOBenchmark(object):
         self.num_gpus = self.args.num_gpus
 
 
-
-        def get_dlrm_compute_time(batch_size):
-            # Fitting lin reg batches and mus:
-            #     	slope: 1.5067222284653297e-06*batch + 0.02252012929280226
-            #     	R: 0.9416433814439628, P: 1.093003181515688e-16
-            # Fitting lin reg to batches and stds:
-            #     	slope: 6.460808729358035e-08*batch + -0.0001192373671573101
-            #     	R: 0.807393946380492, P: 7.9408040301846e-09
-            compute_time = 1.5067222284653297e-06 * batch_size + 0.02252012929280226
-            std_dev = 6.460808729358035e-08 * batch_size - 0.0001192373671573101
-            return compute_time, std_dev
+        def get_dlrm_compute_time(num_gpus, batch_size):
+            # Fitting lin reg gpus, batches and mus:
+            #     	Model: 
+            #     		compute_time_mean = np.dot([6.31850988e-03 1.47435947e-06], [num_gpus, batch_size]) + -0.0035671384995684535
+            #     	R2: 0.9461465604338517
+            # Fitting lin reg gpus, batches and stds:
+            #     Model:
+            #     	compute_time_std = np.dot([3.35919846e-04 6.32267933e-08], [num_gpus, batch_size]) + -0.0013904127910698847
+            #     R2: 0.7095817835199315
+            compute_time_mean = np.dot([6.31850988e-03, 1.47435947e-06], [num_gpus, batch_size]) + -0.0035671384995684535
+            compute_time_std = np.dot([3.35919846e-04, 6.32267933e-08], [num_gpus, batch_size]) + -0.0013904127910698847
+            return compute_time_mean, compute_time_std
 
         self.computation_time, self.computation_time_stdev = get_dlrm_compute_time(self.batch_size)
         logging.info(f'Using sleep time config for {workload} with batch size {self.batch_size} and {self.num_gpus} GPUs: {self.computation_time} {self.computation_time_stdev}')
