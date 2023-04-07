@@ -127,7 +127,7 @@ class DLIOBenchmark(object):
         self.num_gpus = self.args.num_gpus
 
 
-        def get_dlrm_compute_time(num_gpus, batch_size):
+        def get_compute_time(num_gpus, batch_size):
             # Fitting lin reg gpus, batches and mus:
             #     	Model: 
             #     		compute_time_mean = np.dot([6.31850988e-03 1.47435947e-06], [num_gpus, batch_size]) + -0.0035671384995684535
@@ -140,7 +140,7 @@ class DLIOBenchmark(object):
             compute_time_std = np.dot([3.35919846e-04, 6.32267933e-08], [num_gpus, batch_size]) + -0.0013904127910698847
             return compute_time_mean, compute_time_std
 
-        self.computation_time, self.computation_time_stdev = get_dlrm_compute_time(self.batch_size)
+        self.computation_time, self.computation_time_stdev = get_compute_time(self.batch_size)
         logging.info(f'Using sleep time config for {workload} with batch size {self.batch_size} and {self.num_gpus} GPUs: {self.computation_time} {self.computation_time_stdev}')
 
         if self.do_profiling:
