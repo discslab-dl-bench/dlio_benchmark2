@@ -137,7 +137,7 @@ class DLIOBenchmark(object):
             compute_time_std = np.dot([3.35919846e-04, 6.32267933e-08], [num_gpus, batch_size]) + -0.0013904127910698847
             return compute_time_mean, compute_time_std
 
-        self.computation_time, self.computation_time_stdev = get_compute_time(self.batch_size)
+        self.computation_time, self.computation_time_stdev = get_compute_time(self.num_gpus, self.batch_size)
         logging.info(f'Using sleep time config for {workload} with batch size {self.batch_size} and {self.num_gpus} GPUs: {self.computation_time} {self.computation_time_stdev}')
 
         if self.do_profiling:
