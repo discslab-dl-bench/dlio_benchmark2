@@ -18,6 +18,7 @@ import os
 import math
 import hydra
 import logging
+import numpy as np
 import pandas as pd
 from time import time, perf_counter_ns
 from numpy import random
@@ -120,12 +121,23 @@ class DLIOBenchmark(object):
         workload = hydra_cfg.runtime.choices.workload
         self.num_gpus = self.args.num_gpus
 
-        def get_compute_time(batch_size):
-            compute_time = 0.2746153775392209 * batch_size + 0.2850517992610824
-            std_dev = 0.00790564357241069 * batch_size - 0.009242273674232346
-            return compute_time, std_dev
+        def get_compute_time(num_gpus, batch_size):
+            '''
+            Fitting lin reg gpus, batches and mus:
+                    Model: 
+                        compute_time_mean = np.dot([0.00211888, 0.27448834], [num_gpus, batch_size]) + 0.27738914081193955
+                    R2: 0.9996029018567364
 
-        self.computation_time, self.computation_time_stdev = get_compute_time(self.batch_size)
+            Fitting lin reg gpus, batches and stds:
+                    Model:
+                        compute_time_std = np.dot([0.00429292, 0.00705136], [num_gpus, batch_size]) + -0.024112225795433102
+                    R2: 0.48296506758785607
+            '''
+            compute_time_mean = np.dot([0.00211888, 0.27448834], [num_gpus, batch_size]) + 0.27738914081193955
+            compute_time_std = np.dot([0.00429292, 0.00705136], [num_gpus, batch_size]) + -0.024112225795433102
+            return compute_time_mean, compute_time_std
+
+        self.computation_time, self.computation_time_stdev = get_compute_time(self.num_gpus, self.batch_size)
         logging.info(f'Using sleep time config for {workload} with batch size {self.batch_size} and {self.num_gpus} GPUs: {self.computation_time} {self.computation_time_stdev}')
 
         if self.do_profiling:
