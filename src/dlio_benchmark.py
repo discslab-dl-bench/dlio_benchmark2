@@ -263,17 +263,12 @@ class DLIOBenchmark(object):
         reader = self.framework.get_reader(dataset_type=DatasetType.TRAIN)
 
         total_compute_time = 0.0
-        # t0 = start_time = time()
+        t0 = start_time = time()
 
-        t_iter = t0 = perf_counter_ns()
         for batch in reader.next():
-
-            if self.my_rank == 0:
-                logging.info(f'load_batch_mem {perf_counter_ns() - t0}')
-                t0 = perf_counter_ns()
             
-            # logging.debug(f"{utcnow()} Rank {self.my_rank} batch: {batch[:][1:]}")
-            # self.stats.batch_loaded(epoch, overall_step, block, t0)
+            logging.debug(f"{utcnow()} Rank {self.my_rank} batch: {batch[:][1:]}")
+            self.stats.batch_loaded(epoch, overall_step, block, t0)
 
             self.framework.barrier()
             # Log a new block, unless it's the first one which we've already logged before the loop
@@ -290,11 +285,7 @@ class DLIOBenchmark(object):
                 self.framework.compute(epoch, block_step, computation_time)
             self.framework.barrier()
 
-            if self.my_rank == 0:
-                logging.info(f'all_compute {perf_counter_ns() - t0}')
-                logging.info(f'step_end {perf_counter_ns() - t_iter}')
-
-            # self.stats.batch_processed(epoch, overall_step, block, t0)
+            self.stats.batch_processed(epoch, overall_step, block, t0)
 
             if self.do_checkpoint and (self.steps_between_checkpoints>=0) and overall_step == self.next_checkpoint_step:
                 self.stats.end_block(epoch, block, block_step)
@@ -318,8 +309,7 @@ class DLIOBenchmark(object):
                 break
                 
             overall_step += 1
-            t_iter = t0 = perf_counter_ns()
-            # t0 = time()
+            t0 = time()
 
         if self.do_checkpoint and (self.steps_between_checkpoints < 0) and (epoch == self.next_checkpoint_epoch):
             self.stats.end_block(epoch, block, block_step)
