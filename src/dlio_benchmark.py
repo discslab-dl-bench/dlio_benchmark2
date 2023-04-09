@@ -127,17 +127,19 @@ class DLIOBenchmark(object):
 
         def get_sleep_time(num_gpus, batch_size):
             """
+
             Fitting lin reg gpus, batches and mus:
                 Model: 
-                    compute_time_mean = np.dot([0.00604963, 0.11793859], [num_gpus, batch_size]) + 0.3240134142857145
-                R2: 0.9929730788770561
+                    compute_time_mean = np.dot([0.00622823 0.11688357], [num_gpus, batch_size]) + 0.32936322533391393
+                    R2: 0.9955917401737793
             Fitting lin reg gpus, batches and stds:
                 Model:
-                    compute_time_std = np.dot([ 4.26642830e-03, -5.05754599e-05], [num_gpus, batch_size]) + 0.004639954390543322
-                R2: 0.47966001598486097
+                            compute_time_std = np.dot([ 0.004484   -0.00128301], [num_gpus, batch_size]) + 0.009669258568234716
+                    R2: 0.6380789903949422
+                    
             """
-            compute_time_mean = np.dot([0.00604963, 0.11793859], [num_gpus, batch_size]) + 0.3240134142857145
-            compute_time_std = np.dot([ 4.26642830e-03, -5.05754599e-05], [num_gpus, batch_size]) + 0.004639954390543322
+            compute_time_mean = np.dot([0.00622823, 0.11688357], [num_gpus, batch_size]) + 0.32936322533391393
+            compute_time_std = np.dot([ 0.004484, -0.00128301], [num_gpus, batch_size]) + 0.009669258568234716
             return compute_time_mean, compute_time_std
 
         self.computation_time, self.computation_time_stdev = get_sleep_time(self.num_gpus, self.batch_size)
