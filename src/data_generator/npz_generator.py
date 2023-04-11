@@ -60,4 +60,4 @@ class NPZGenerator(DataGenerator):
             np.save(fnx, img)
             np.save(fny, mask)
 
-            progress(i+1, self.total_files_to_generate, "Generating NPZ Data")
+            progress(i+1, self.total_files_to_generate, "Generating NPY Data")

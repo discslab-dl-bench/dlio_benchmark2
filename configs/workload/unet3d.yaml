@@ -14,7 +14,7 @@ num_gpus: 8
 dataset: 
   data_folder: data/unet3d/
   format: npz
-  num_files_train: 168
+  num_files_train: 1680
   num_files_eval: 42
   num_samples_per_file: 1
   record_length: 234560851

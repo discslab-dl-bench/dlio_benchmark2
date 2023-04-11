@@ -38,10 +38,10 @@ comm = MPI.COMM_WORLD
 
 totensor=transforms.ToTensor()
 
-with open(f'configs/sleep_times/unet3d_preproc_times.json', 'r') as infile:
-    PREPROC_TIMES = json.load(infile)
+# with open(f'configs/sleep_times/unet3d_preproc_times.json', 'r') as infile:
+#     PREPROC_TIMES = json.load(infile)
 
-NUM_PREPROC_SAMPLES = len(PREPROC_TIMES)
+# NUM_PREPROC_SAMPLES = len(PREPROC_TIMES)
 
 ### reading file of different formats.  resize is simple to keep the data uniform
 def read_jpeg(filename):
@@ -57,13 +57,13 @@ def read_npz(filename):
         logging.info(f"sample_load {perf_counter_ns() - t0}")
     
     t0 = perf_counter_ns()
-    # x = np.resize(x, (224, 224))
-    # y = np.resize(y, (224, 224))
-    x = random.rand(224, 224)
-    y = random.rand(224, 224)
+    x = np.resize(x, (224, 224))
+    y = np.resize(y, (224, 224))
+    # x = random.rand(224, 224)
+    # y = random.rand(224, 224)
 
-    i = random.randint(NUM_PREPROC_SAMPLES)
-    sleep(PREPROC_TIMES[i])
+    # i = random.randint(NUM_PREPROC_SAMPLES)
+    # sleep(PREPROC_TIMES[i])
 
     if comm.rank == 0:
         logging.info(f"sample_preproc {perf_counter_ns() - t0}")
