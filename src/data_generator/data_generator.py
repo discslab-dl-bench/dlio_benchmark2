@@ -39,6 +39,7 @@ class DataGenerator(ABC):
         self.do_eval = self._args.do_eval
         self.num_files_eval = self._args.num_files_eval
         self.num_samples = self._args.num_samples_per_file
+        self.eval_num_samples_per_file = self._args.eval_num_samples_per_file
         self.my_rank = self._args.my_rank
         self.comm_size = self._args.comm_size
         self.compression = self._args.compression

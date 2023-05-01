@@ -23,6 +23,7 @@ import os
 import torch
 import functools
 import logging
+from numpy import random
 from src.utils.utility import utcnow
 
 from time import sleep
@@ -78,6 +79,7 @@ class TorchFramework(Framework):
 
     def trace_object(self, string, step, r):
         return DummyTraceObject(string, step, r)
+
     def checkpoint(self, epoch, step_number):
         if self.rank() == 0:
             """
@@ -85,13 +87,33 @@ class TorchFramework(Framework):
             """
             if not os.path.exists(self.checkpoint_folder):
                 os.makedirs(self.checkpoint_folder)
-            my_rank = self.rank()
+            
             model_file = os.path.join(self.checkpoint_folder, f"model-{epoch}-{step_number}.bin")
 
-            f = open(model_file, "w")
-            string_val = "x" * self.args.model_size 
-            f.write(string_val)
-            f.close()
+            # More realistic checkpointing emulation using empirical ckpt write q1, mean, std and minimum
+            data = "x" * self.args.model_size
+            total_written = 0
+            i = 0
+            with open(model_file, "w") as fd:
+                while total_written < len(data):
+                    remaining = len(data) - total_written
+
+                    if i % 2 == 0:
+                        # 1st quartile VFS write size distribution
+                        amt_to_write = self.ckpt_write_sz_q1
+                    else:
+                        # mean and std
+                        r = random.normal(self.ckpt_write_sz_mean, self.ckpt_write_sz_std)
+                        # min
+                        amt_to_write = min(remaining, max(self.ckpt_write_sz_min, int(r)))
+
+                    fd.write(data[total_written:total_written + amt_to_write])
+                    total_written += amt_to_write
+                    i += 1
+                    logging.info(f'writing out {amt_to_write} bytes - total {total_written}')
+
+
+
     def compute(self, epoch_number, step, computation_time):
         torch_sleep(computation_time)
 

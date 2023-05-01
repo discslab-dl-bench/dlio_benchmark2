@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 import hydra
 import os
 import logging
+import numpy as np
+
 
 @dataclass
 class ConfigArguments:
@@ -60,8 +62,8 @@ class ConfigArguments:
     profiler: Profiler = Profiler.IOSTAT
     seed: int = 123
     do_checkpoint: bool = False
-    checkpoint_after_epoch: int = 1 
-    epochs_between_checkpoints: int = 1
+    checkpoint_after_epoch: int = -1 
+    epochs_between_checkpoints: int = -1
     steps_between_checkpoints: int = -1
     transfer_size: int = None
     read_threads: int = 1
@@ -80,13 +82,20 @@ class ConfigArguments:
     num_files_eval: int = 0
     eval_time: float = 0.0
     eval_time_stdev: float = 0.0
-    eval_after_epoch: int = 1
-    epochs_between_evals: int = 1
     model_size: int = 10240
     data_loader: DataLoaderType = DataLoaderType.TENSORFLOW
     num_subfolders_train: int = 0
     num_subfolders_eval: int = 0
+    eval_after_epoch: int = -1
+    epochs_between_evals: int = -1
     iostat_devices: ClassVar[List[str]] = []
+    steps_between_evals: int = -1 # steps between eval 
+    eval_num_samples_per_file: int = 1
+    total_eval_steps: int = -1
+    ckpt_write_sz_q1 = 2048
+    ckpt_write_sz_mean = 128000000
+    ckpt_write_sz_std = 64000000
+    ckpt_write_sz_min = 64
 
     def __init__(self):
         """ Virtually private constructor. """
@@ -123,6 +132,9 @@ def LoadConfig(args, config):
         as a way to do model specific setting. 
         '''
         args.model = config['model']
+
+    if 'num_gpus' in config:
+        args.num_gpus = config['num_gpus']
 
     if 'storage' in config:
         if 'storage_type' in config['storage']:
@@ -166,6 +178,8 @@ def LoadConfig(args, config):
             args.format = FormatType(config['dataset']['format'])
         if 'keep_files' in config['dataset']:
             args.keep_files = config['dataset']['keep_files']
+        if 'eval_num_samples_per_file' in config['dataset']:
+            args.eval_num_samples_per_file = config['dataset']['eval_num_samples_per_file']
 
     # data reader
     reader=None
@@ -221,6 +235,10 @@ def LoadConfig(args, config):
             args.eval_after_epoch = config['evaluation']['eval_after_epoch']
         if 'epochs_between_evals' in config['evaluation']:
             args.epochs_between_evals = config['evaluation']['epochs_between_evals']
+        if 'steps_between_evals' in config['evaluation']:
+            args.steps_between_evals = config['evaluation']['steps_between_evals']
+        if 'total_eval_steps' in config['train']:
+            args.total_eval_steps = config['train']['total_eval_steps']
 
     if 'checkpoint' in config:
         if 'checkpoint_folder' in config['checkpoint']:
@@ -234,6 +252,14 @@ def LoadConfig(args, config):
             args.steps_between_checkpoints = config['checkpoint']['steps_between_checkpoints']
         if 'model_size' in config['checkpoint']:
             args.model_size = config['checkpoint']['model_size']
+        if 'ckpt_write_sz_q1' in config['checkpoint']:
+            args.ckpt_write_sz_q1 = config['checkpoint']['ckpt_write_sz_q1']
+        if 'ckpt_write_sz_mean' in config['checkpoint']:
+            args.ckpt_write_sz_mean = config['checkpoint']['ckpt_write_sz_mean']
+        if 'ckpt_write_sz_std' in config['checkpoint']:
+            args.ckpt_write_sz_std = config['checkpoint']['ckpt_write_sz_std']
+        if 'ckpt_write_sz_min' in config['checkpoint']:
+            args.ckpt_write_sz_min = config['checkpoint']['ckpt_write_sz_min']
 
     if 'workflow' in config:
         if 'generate_data' in config['workflow']:

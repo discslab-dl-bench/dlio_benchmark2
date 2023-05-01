@@ -13,7 +13,7 @@ num_gpus: 8
 
 dataset: 
   data_folder: data/unet3d/
-  format: npz
+  format: npy
   num_files_train: 1680
   num_files_eval: 42
   num_samples_per_file: 1
@@ -28,10 +28,9 @@ reader:
   file_shuffle: seed
   sample_shuffle: seed
 
+
 train:
   epochs: 25
-  computation_time: 1.5315
-  computation_time_stdev: 0.334
 
 evaluation: 
   eval_time: 8.9027
@@ -43,3 +42,7 @@ checkpoint:
   checkpoint_folder: checkpoints/unet3d
   checkpoint_after_epoch: 50
   model_size: 499153191
+  ckpt_write_sz_q1: 1280
+  ckpt_write_sz_mean: 2170231
+  ckpt_write_sz_std: 4459727
+  ckpt_write_sz_min: 64

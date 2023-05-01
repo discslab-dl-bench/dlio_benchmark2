@@ -53,6 +53,9 @@ class ReaderFactory(object):
         elif data_loader == DataLoaderType.PYTORCH:
             from src.reader.torch_data_loader_reader import TorchDataLoaderReader
             return TorchDataLoaderReader(dataset_type)
+        elif data_loader == DataLoaderType.TERABYTE:
+            from src.reader.terabyte_data_loader_reader import TeraBinLoaderReader
+            return TeraBinLoaderReader(dataset_type)
         # Implement other data loader here
         else:
             print("Data Loader %s is not implemented" %data_loader)

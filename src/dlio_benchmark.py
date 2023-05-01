@@ -19,10 +19,8 @@ import math
 import hydra
 import logging
 import numpy as np
-import pandas as pd
 from time import time, perf_counter_ns
 from numpy import random
-import json
 
 # Reduce TF and CUDA logging
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -34,7 +32,6 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
-from dataclasses import dataclass
 from src.utils.utility import utcnow, measure_performance
 from omegaconf import DictConfig, OmegaConf
 from src.utils.statscounter import StatsCounter
@@ -47,6 +44,23 @@ from src.data_generator.generator_factory import GeneratorFactory
 from src.storage.storage_factory import StorageFactory
 
 
+def get_compute_time(workload, num_gpus, batch_size):
+    if workload == 'dlrm':
+        mean_coefs, mean_bias = [6.31850988e-03, 1.47435947e-06], -0.0035671384995684535
+        std_coefs, std_bias = [3.35919846e-04, 6.32267933e-08], -0.0013904127910698847
+    elif workload == 'unet3d':
+        mean_coefs, mean_bias = [0.00211888, 0.27448834], 0.27738914081193955
+        std_coefs, std_bias = [0.00429292, 0.00705136], -0.024112225795433102
+    elif workload == 'bert':
+        mean_coefs, mean_bias = [0.00622823, 0.11688357], 0.32936322533391393
+        std_coefs, std_bias = [ 0.004484, -0.00128301], 0.009669258568234716
+    else:
+        raise Exception(f'Unknown workload {workload}. Please configure a simulation sleep time in the config.')
+    compute_time_mean = np.dot(mean_coefs, [num_gpus, batch_size]) + mean_bias
+    compute_time_std = np.dot(std_coefs, [num_gpus, batch_size]) + std_bias
+    return compute_time_mean, compute_time_std
+
+    
 class DLIOBenchmark(object):
     """
     The Benchmark represents the I/O behavior of deep learning applications.
@@ -107,7 +121,7 @@ class DLIOBenchmark(object):
                 logging.info(f"{utcnow()} Reading YAML config file './configs/workload/{hydra_cfg.runtime.choices.workload}.yaml'" )
             except:
                 pass
-
+        
         self.generate_only = self.args.generate_only
         self.do_profiling = self.args.do_profiling
 
@@ -115,30 +129,21 @@ class DLIOBenchmark(object):
         self.num_files_train = self.args.num_files_train
         self.num_samples = self.args.num_samples_per_file
         self.total_training_steps = self.args.total_training_steps
+        self.total_eval_steps = self.args.total_eval_steps
         
         self.epochs = self.args.epochs
         self.batch_size = self.args.batch_size
         workload = hydra_cfg.runtime.choices.workload
         self.num_gpus = self.args.num_gpus
 
-        def get_compute_time(num_gpus, batch_size):
-            '''
-            Fitting lin reg gpus, batches and mus:
-                    Model: 
-                        compute_time_mean = np.dot([0.00211888, 0.27448834], [num_gpus, batch_size]) + 0.27738914081193955
-                    R2: 0.9996029018567364
-
-            Fitting lin reg gpus, batches and stds:
-                    Model:
-                        compute_time_std = np.dot([0.00429292, 0.00705136], [num_gpus, batch_size]) + -0.024112225795433102
-                    R2: 0.48296506758785607
-            '''
-            compute_time_mean = np.dot([0.00211888, 0.27448834], [num_gpus, batch_size]) + 0.27738914081193955
-            compute_time_std = np.dot([0.00429292, 0.00705136], [num_gpus, batch_size]) + -0.024112225795433102
-            return compute_time_mean, compute_time_std
-
-        self.computation_time, self.computation_time_stdev = get_compute_time(self.num_gpus, self.batch_size)
-        logging.info(f'Using sleep time config for {workload} with batch size {self.batch_size} and {self.num_gpus} GPUs: {self.computation_time} {self.computation_time_stdev}')
+        # Take the compute time values from config or generate them
+        if self.args.computation_time == 0:
+            self.computation_time, self.computation_time_stdev = get_compute_time(workload, self.num_gpus, self.batch_size)
+        else:
+            self.computation_time = self.args.computation_time
+            self.computation_time_stdev = self.args.computation_time_std
+        
+        logging.info(f'Sleep time distrib for {workload} with batch size {self.batch_size} and {self.num_gpus} GPUs: {self.computation_time} {self.computation_time_stdev}')
 
         if self.do_profiling:
             self.profiler = ProfilerFactory().get_profiler(self.args.profiler)
@@ -161,6 +166,8 @@ class DLIOBenchmark(object):
         self.eval_time_stdev = self.args.eval_time_stdev        
         self.eval_after_epoch = self.args.eval_after_epoch
         self.epochs_between_evals = self.args.epochs_between_evals
+        self.steps_between_evals = self.args.steps_between_evals
+        self.eval_num_samples = self.args.eval_num_samples_per_file
 
         # Hold various lists/dicts for statistics
         self.time_to_load_train_batch = []
@@ -222,7 +229,7 @@ class DLIOBenchmark(object):
 
             if self.eval_time > 0:
                 if self.eval_time_stdev > 0:
-                    eval_time = random.normal(self.eval_time, self.eval_time_stdev)
+                    eval_time = max(0, random.normal(self.eval_time, self.eval_time_stdev))
                 else:
                     eval_time = self.eval_time
                 total_compute_time += eval_time
@@ -231,7 +238,7 @@ class DLIOBenchmark(object):
             self.stats.eval_batch_processed(epoch, step, t0)
 
             step += 1
-            if step > total:
+            if step > total or step >= self.total_eval_steps:
                 break
                 
             self.framework.barrier()
@@ -250,6 +257,9 @@ class DLIOBenchmark(object):
         block = 1   # A continuous period of training steps, ended by checkpointing
         block_step = overall_step = 1   # Steps are taken within blocks
         max_steps = math.floor(self.num_samples * self.num_files_train / self.batch_size / self.comm_size)
+        self.next_eval_step = self.steps_between_evals        
+        self.next_checkpoint_step = self.steps_between_checkpoints         
+
         # Start the very first block
         self.stats.start_block(epoch, block)
         reader = self.framework.get_reader(dataset_type=DatasetType.TRAIN)
@@ -283,7 +293,27 @@ class DLIOBenchmark(object):
                 logging.info(f"all_compute {perf_counter_ns() - t0}")
                 logging.info(f"step_end {perf_counter_ns() - t_iter}")
 
-            if self.do_checkpoint and (self.steps_between_checkpoints>=0) and overall_step == self.next_checkpoint_step:
+            # Perform evaluation during epochs if required
+            # Assume that evaluation happens on all GPU
+            if self.do_eval and overall_step == self.next_eval_step:
+                # Before starting the evaluation, terminating the current block
+                self.stats.end_block(epoch, block, block_step)
+
+                # Initialize the eval data loader & perform evaluation
+                self.stats.start_eval(epoch)
+                self.framework.get_reader(DatasetType.VALID).read(epoch)
+                self.framework.barrier()
+                self._eval(epoch)
+                self.stats.end_eval(epoch)
+                self.framework.barrier()
+                self.framework.get_reader(DatasetType.VALID).finalize()
+                self.next_eval_step += self.steps_between_evals
+
+                # Start recording the next block
+                self.stats.start_block(epoch, block)
+
+
+            if self.do_checkpoint and self.steps_between_checkpoints >= 0 and overall_step == self.next_checkpoint_step:
                 self.stats.end_block(epoch, block, block_step)
                 self.stats.start_ckpt(epoch, block, overall_step)
                 self.framework.checkpoint(epoch, overall_step)
@@ -293,6 +323,7 @@ class DLIOBenchmark(object):
                 # Reset the number of steps after every checkpoint to mark the start of a new block
                 block_step = 1
                 self.next_checkpoint_step += self.steps_between_checkpoints
+                self.stats.start_block(epoch, block)
             else:
                 block_step += 1
 
@@ -332,10 +363,9 @@ class DLIOBenchmark(object):
             
             # Keep track of the next epoch at which we will evaluate
             next_eval_epoch = self.eval_after_epoch
-            self.next_checkpoint_epoch = self.checkpoint_after_epoch
+            next_checkpoint_epoch = self.checkpoint_after_epoch
 
             for epoch in range(1, self.epochs + 1):
-                self.next_checkpoint_step = self.steps_between_checkpoints                
                 self.stats.start_epoch(epoch)
 
                 # Initialize the dataset
@@ -345,7 +375,6 @@ class DLIOBenchmark(object):
                 steps = self._train(epoch)
                 self.stats.end_epoch(epoch, steps)
                 logging.debug(f"{utcnow()} Rank {self.my_rank} returned after {steps} steps.")
-
 
                 self.framework.barrier()
                 self.framework.get_reader(DatasetType.TRAIN).finalize()
@@ -366,11 +395,13 @@ class DLIOBenchmark(object):
                     self.framework.barrier()
                     self.framework.get_reader(DatasetType.VALID).finalize()
 
-            # UNET3D Checkpoints only at the very end
-            self.stats.start_ckpt(epoch, 0, steps)
-            self.framework.checkpoint(epoch, steps)
-            self.stats.end_ckpt(epoch, 0)
-            self.framework.barrier()
+                if self.do_checkpoint and epoch == next_checkpoint_epoch:
+                    next_checkpoint_epoch += self.epochs_between_checkpoints
+                    # UNET3D Checkpoints only at the very end
+                    self.stats.start_ckpt(epoch, 0, steps)
+                    self.framework.checkpoint(epoch, steps)
+                    self.stats.end_ckpt(epoch, 0)
+                    self.framework.barrier()
 
         self.stop_timestamp=time()
 
@@ -419,5 +450,6 @@ def main(cfg : DictConfig) -> None:
     benchmark.finalize()
 
 if __name__ == '__main__':
+    OmegaConf.register_new_resolver("eval", eval)
     main()
     exit(0)

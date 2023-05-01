@@ -41,13 +41,19 @@ class StatsCounter(object):
             if self.args.total_training_steps > max_steps:
                 logging.error(f"Only have enough data for {max_steps} steps but {self.args.total_training_steps} wanted")
                 exit(-1)
-            self.steps_override = True
             self.steps = self.args.total_training_steps
         else:
-            self.steps_override = False
             self.steps = max_steps
         
-        self.steps_eval = math.floor(self.args.num_samples_per_file * self.args.num_files_eval / self.args.batch_size_eval / self.args.comm_size)
+        max_eval_steps = math.floor(self.args.num_samples_per_file * self.args.num_files_eval / self.args.batch_size_eval / self.args.comm_size)
+        if self.args.total_eval_steps > 0:
+            if self.args.total_eval_steps > max_eval_steps:
+                logging.error(f"Only enough data for {max_eval_steps} steps of evaluation but {self.args.total_eval_steps} wanted")
+                exit(-1)  
+            self.eval_steps = self.args.total_eval_steps
+        else:
+            self.eval_steps = max_eval_steps
+        
         # Only the root process keeps track of overall stats
         if self.my_rank == 0:
             self.per_epoch_stats = {}
@@ -59,10 +65,7 @@ class StatsCounter(object):
     def start_epoch(self, epoch):
         if self.my_rank == 0:
             ts = utcnow()
-            if self.steps_override:
-                logging.info(f"{ts} Starting epoch {epoch}: Overriding number of steps to {self.steps}.")
-            else:
-                logging.info(f"{ts} Starting epoch {epoch}: {self.steps} steps expected")
+            logging.info(f"{ts} Starting epoch {epoch}: {self.steps} steps expected")
             self.per_epoch_stats[epoch] = {
                 'start': ts,
             }
@@ -85,7 +88,7 @@ class StatsCounter(object):
     def start_eval(self, epoch):
         if self.my_rank == 0:
             ts = utcnow()
-            logging.info(f"{ts} Starting eval - {self.steps_eval} steps expected")
+            logging.info(f"{ts} Starting eval - {self.eval_steps} steps expected")
             self.per_epoch_stats[epoch]['eval'] = {
                 'start': ts
             }
@@ -97,7 +100,7 @@ class StatsCounter(object):
             ts = utcnow()
             duration = pd.to_datetime(ts)- pd.to_datetime(self.per_epoch_stats[epoch]['eval']['start'])
             duration = '{:.2f}'.format(duration.total_seconds())
-            logging.info(f"{ts} Ending eval - {self.steps_eval} steps completed in {duration} s")
+            logging.info(f"{ts} Ending eval - {self.eval_steps} steps completed in {duration} s")
             self.per_epoch_stats[epoch]['eval']['end'] = ts
             self.per_epoch_stats[epoch]['eval']['duration'] = duration        
 

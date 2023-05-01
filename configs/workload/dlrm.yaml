@@ -1,0 +1,44 @@
+model: dlrm
+
+framework: pytorch
+
+num_gpus: 4
+
+workflow:
+  generate_data: False
+  train: True
+  profiling: False
+  checkpoint: True
+  evaluation: True
+
+dataset: 
+  data_folder: data/dlrm
+  format: bin
+  num_files_train: 1
+  num_files_eval: 1
+  num_samples_per_file: 4195198976
+  record_length: 327680
+  keep_files: True
+  eval_num_samples_per_file: 91681240
+  
+reader: 
+  data_loader: terabyte
+  batch_size: 2048
+  batch_size_eval: 2048
+
+train:
+  epochs: 1
+  total_training_steps: 1000
+
+evaluation: 
+  eval_time: 0.0843
+  total_eval_steps: 4096
+  steps_between_evals: 16384
+
+checkpoint:
+  steps_between_checkpoints: 16384
+  model_size: 27129166561
+  ckpt_write_sz_q1: 7348
+  ckpt_write_sz_mean: 517653535
+  ckpt_write_sz_std: 841116648
+  ckpt_write_sz_min: 98

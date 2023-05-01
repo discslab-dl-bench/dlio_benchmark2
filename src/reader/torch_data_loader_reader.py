@@ -38,10 +38,6 @@ comm = MPI.COMM_WORLD
 
 totensor=transforms.ToTensor()
 
-# with open(f'configs/sleep_times/unet3d_preproc_times.json', 'r') as infile:
-#     PREPROC_TIMES = json.load(infile)
-
-# NUM_PREPROC_SAMPLES = len(PREPROC_TIMES)
 
 ### reading file of different formats.  resize is simple to keep the data uniform
 def read_jpeg(filename):
@@ -49,7 +45,7 @@ def read_jpeg(filename):
 def read_png(filename):
     return totensor(Image.open(filename).resize((224, 224)))
 
-def read_npz(filename):
+def read_npy(filename):
     t0 = perf_counter_ns()
     x = np.load(f'{filename}_x.npy')
     y = np.load(f'{filename}_y.npy')
@@ -59,16 +55,14 @@ def read_npz(filename):
     t0 = perf_counter_ns()
     x = np.resize(x, (224, 224))
     y = np.resize(y, (224, 224))
-    # x = random.rand(224, 224)
-    # y = random.rand(224, 224)
-
-    # i = random.randint(NUM_PREPROC_SAMPLES)
-    # sleep(PREPROC_TIMES[i])
 
     if comm.rank == 0:
         logging.info(f"sample_preproc {perf_counter_ns() - t0}")
         
     return x, y
+
+def read_npz(filename):
+    return np.load(filename)
 
 def read_hdf5(f):
     file_h5 = h5py.File(f, 'r')
@@ -83,6 +77,7 @@ def read_file(f):
 filereader={
     FormatType.JPEG: read_jpeg, 
     FormatType.PNG: read_png, 
+    FormatType.NPY: read_npy, 
     FormatType.NPZ: read_npz, 
     FormatType.HDF5: read_hdf5, 
 }

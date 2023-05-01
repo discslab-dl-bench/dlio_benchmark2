@@ -16,7 +16,7 @@
 """
 import math
 import logging
-from time import time
+from time import perf_counter_ns, time
 
 from src.utils.utility import utcnow, timeit
 from src.common.enumerations import Shuffle, FormatType
@@ -52,7 +52,7 @@ def read_png(filename):
 
 @tf.function
 @timeit
-def read_npz(filename):
+def read_npy(filename):
     img = tf.io.read_file(filename)
     return img
 
@@ -70,7 +70,7 @@ def read_file(filename):
 filereader={
     FormatType.JPEG: read_jpeg, 
     FormatType.PNG: read_png, 
-    FormatType.NPZ: read_npz, 
+    FormatType.NPZ: read_npy, 
     FormatType.HDF5: read_hdf5, 
 }
 
@@ -121,6 +121,7 @@ class TFDataLoaderReader(FormatReader):
         
         if self.prefetch_size > 0:
             self._dataset = self._dataset.prefetch(buffer_size=self.prefetch_size)
+
     def next(self):
         """
         Provides the iterator over tfrecord data pipeline.
@@ -133,11 +134,12 @@ class TFDataLoaderReader(FormatReader):
             total = math.floor(self.num_samples*len(self._file_list)/self.batch_size/self.comm_size)
             logging.debug(f"{utcnow()} Rank {self.my_rank} should read {total} batches")
 
-        # The previous version crashed when all workers could not generate the same amount of batches
-        # Using the inbuilt tensorflow dataset iteration seems to work fine, was there an advantage of doing it the old way?
-        # t1
+        t0 = perf_counter_ns()
         for batch in self._dataset:
+            if self.my_rank == 0:
+                logging.info(f"load_batch_inner {perf_counter_ns() - t0}")
             yield batch
+            t0 = perf_counter_ns()
 
     def finalize(self):
         pass

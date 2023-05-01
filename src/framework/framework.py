@@ -43,6 +43,11 @@ class Framework(ABC):
         self.args = ConfigArguments.get_instance()
         self.output_folder = self.args.output_folder
         self.checkpoint_folder = self.args.checkpoint_folder
+        # Ckpt write size distribution params
+        self.ckpt_write_sz_q1 = self.args.ckpt_write_sz_q1
+        self.ckpt_write_sz_mean = self.args.ckpt_write_sz_mean
+        self.ckpt_write_sz_std = self.args.ckpt_write_sz_std
+        self.ckpt_write_sz_min = self.args.ckpt_write_sz_min
         pass
 
     @abstractmethod
