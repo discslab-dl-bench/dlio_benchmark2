@@ -87,8 +87,8 @@ class ConfigArguments:
     num_subfolders_train: int = 0
     num_subfolders_eval: int = 0
     eval_after_epoch: int = -1
-    epochs_between_evals: int = -1
     iostat_devices: ClassVar[List[str]] = []
+    epochs_between_evals: int = -1
     steps_between_evals: int = -1 # steps between eval 
     eval_num_samples_per_file: int = 1
     total_eval_steps: int = -1
