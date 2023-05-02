@@ -1,5 +1,10 @@
 #!/bin/bash
 
-WORKLOAD=${1:-unet3d}
+SCRIPT_DIR=$(dirname -- "$( readlink -f -- "$0"; )")
 
-docker run -it --rm -v /raid/data/dlio:/workspace/dlio/data dlio:unet3d-instrumented /bin/bash do_datagen.sh $WORKLOAD
+WORKLOAD=${1:-unet3d}
+IMAGE=${2:-dlio:test}
+OUTPUT_DIR=${3:-"$SCRIPT_DIR/data"}
+
+docker run -it --rm -v $OUTPUT_DIR:/workspace/dlio/data $IMAGE /bin/bash 
+# do_datagen.sh $WORKLOAD

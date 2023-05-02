@@ -2,7 +2,8 @@ model: dlrm
 
 framework: pytorch
 
-num_gpus: 4
+# Need a num_gpus parameter since we run with a single data loader
+num_gpus: 8
 
 workflow:
   generate_data: False
@@ -23,16 +24,16 @@ dataset:
   
 reader: 
   data_loader: terabyte
-  batch_size: 2048
-  batch_size_eval: 2048
+  batch_size: 32768
+  batch_size_eval: 16384
 
 train:
   epochs: 1
-  total_training_steps: 1000
+  total_training_steps: 32768
 
 evaluation: 
   eval_time: 0.0843
-  total_eval_steps: 4096
+  total_eval_steps: 2048
   steps_between_evals: 16384
 
 checkpoint:

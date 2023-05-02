@@ -15,20 +15,18 @@
    limitations under the License.
 """
 
-from src.common.enumerations import Compression
 from src.data_generator.data_generator import DataGenerator
 
 import logging
 import numpy as np
 from numpy import random
 
-from src.utils.utility import progress, utcnow
-from shutil import copyfile
+from src.utils.utility import progress
 
 """
 Generator for creating data in NPZ format.
 """
-class NPZGenerator(DataGenerator):
+class NPYGenerator(DataGenerator):
     def __init__(self):
         super().__init__()
 

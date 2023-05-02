@@ -9,12 +9,10 @@ workflow:
   evaluation: True
   profiling: False
 
-num_gpus: 8
-
 dataset: 
   data_folder: data/unet3d/
   format: npy
-  num_files_train: 1680
+  num_files_train: 168
   num_files_eval: 42
   num_samples_per_file: 1
   record_length: 234560851
@@ -28,14 +26,13 @@ reader:
   file_shuffle: seed
   sample_shuffle: seed
 
-
 train:
-  epochs: 25
+  epochs: 50
 
 evaluation: 
   eval_time: 8.9027
   eval_time_stdev: 3.9049
-  eval_after_epoch: 26
+  eval_after_epoch: 25
   epochs_between_evals: 25
 
 checkpoint:

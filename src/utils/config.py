@@ -22,7 +22,7 @@ import hydra
 import os
 import logging
 import numpy as np
-
+from mpi4py import MPI
 
 @dataclass
 class ConfigArguments:
@@ -97,6 +97,7 @@ class ConfigArguments:
     ckpt_write_sz_mean = 128000000
     ckpt_write_sz_std = 64000000
     ckpt_write_sz_min = 64
+    num_gpus=MPI.COMM_WORLD.size    # default to the number of MPI processes
 
     def __init__(self):
         """ Virtually private constructor. """
@@ -133,9 +134,6 @@ def LoadConfig(args, config):
         as a way to do model specific setting. 
         '''
         args.model = config['model']
-
-    if 'num_gpus' in config:
-        args.num_gpus = config['num_gpus']
 
     if 'storage' in config:
         if 'storage_type' in config['storage']:

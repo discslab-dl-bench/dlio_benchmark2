@@ -32,41 +32,39 @@ class BINGenerator(DataGenerator):
         """
         super().generate()
 
+        samples_per_iteration = 10_000_000
+
         for i in range(self.my_rank, int(self.total_files_to_generate), self.comm_size):
-            progress(i+1, self.total_files_to_generate, "Generating Binary Data")
             out_path_spec = self.storage.get_uri(self._file_list[i])
-            # File size will be different depending on training or validation file
+
             if i < self.num_files_train:
-                # Generating Training files
-                segment_size = 91681240*5
-                num_instance = self.num_samples #4195198976 for dlrm training
-                parts = math.ceil(num_instance / segment_size)
-                for k in range(0, parts):
-                    num_written = segment_size if k < parts-1 else num_instance - k*segment_size
-                    X_int = np.random.randint(2557264, size = (num_written, 13))
-                    X_cat = np.random.randint(0, CATEGORY_RANGES, size = (num_instance, 26))
-                    y = np.random.randint(2, size=num_written)
-                    np_data = np.concatenate([y.reshape(-1, 1), X_int, X_cat], axis=1)
-                    np_data = np_data.astype(np.int32)
-                    if self.compression != Compression.ZIP:
-                        with open(out_path_spec, 'ab') as output_file:
-                            output_file.write(np_data.tobytes())
-                            output_file.flush()
-                            os.fsync(output_file.fileno())
+                samples_written = 0
+
+                with open(out_path_spec, 'ab') as output_file:
+
+                    while samples_written < self.num_samples:
+                        progress(samples_written, self.num_samples, "Generating DLRM training data samples")
+                        X_int = np.random.randint(2557264, size = (samples_per_iteration, 13))
+                        X_cat = np.random.randint(0, CATEGORY_RANGES, size = (samples_per_iteration, 26))
+                        y = np.random.randint(2, size=samples_per_iteration)
+                        np_data = np.concatenate([y.reshape(-1, 1), X_int, X_cat], axis=1)
+                        np_data = np_data.astype(np.int32)
+                        output_file.write(np_data.tobytes())
+                        output_file.flush()
+                        samples_written += samples_per_iteration
+
             else:
                 # Generating Evaluation files
-                segment_size = 91681240*5
-                num_instance = self.eval_num_samples_per_file #4195198976 for dlrm training
-                parts = math.ceil(num_instance / segment_size)
-                for k in range(0, parts):
-                    num_written = segment_size if k < parts-1 else num_instance - k*segment_size
-                    X_int = np.random.randint(2557264, size = (num_written, 13))
-                    X_cat = np.random.randint(0, CATEGORY_RANGES, size = (num_instance, 26))
-                    y = np.random.randint(2, size=num_written)
-                    np_data = np.concatenate([y.reshape(-1, 1), X_int, X_cat], axis=1)
-                    np_data = np_data.astype(np.int32)
-                    if self.compression != Compression.ZIP:
-                        with open(out_path_spec, 'ab') as output_file:
-                            output_file.write(np_data.tobytes())
-                            output_file.flush()
-                            os.fsync(output_file.fileno())
+                samples_written = 0
+
+                with open(out_path_spec, 'ab') as output_file:
+                    while samples_written < self.eval_num_samples_per_file:
+                        progress(samples_written, self.num_samples, "Generating DLRM eval data samples")
+                        X_int = np.random.randint(2557264, size = (samples_per_iteration, 13))
+                        X_cat = np.random.randint(0, CATEGORY_RANGES, size = (samples_per_iteration, 26))
+                        y = np.random.randint(2, size=samples_per_iteration)
+                        np_data = np.concatenate([y.reshape(-1, 1), X_int, X_cat], axis=1)
+                        np_data = np_data.astype(np.int32)
+                        output_file.write(np_data.tobytes())
+                        output_file.flush()
+                        samples_written += samples_per_iteration

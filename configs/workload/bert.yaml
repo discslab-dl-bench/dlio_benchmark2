@@ -40,6 +40,6 @@ reader:
 checkpoint:
   checkpoint_folder: checkpoints/bert
   steps_between_checkpoints: 2400
-  checkpoint_after_step: 0
+  checkpoint_after_step: 1
   model_size: 4034713312
   

@@ -21,6 +21,7 @@ from src.data_generator.csv_generator import CSVGenerator
 from src.data_generator.tf_generator import TFRecordGenerator
 from src.data_generator.hdf5_generator import HDF5Generator
 from src.data_generator.npz_generator import NPZGenerator
+from src.data_generator.npy_generator import NPYGenerator
 from src.data_generator.jpeg_generator import JPEGGenerator
 from src.data_generator.png_generator import PNGGenerator
 from src.data_generator.bin_generator import BINGenerator
@@ -41,6 +42,8 @@ class GeneratorFactory(object):
             return CSVGenerator()
         elif type == FormatType.NPZ:
             return NPZGenerator()
+        elif type == FormatType.NPY:
+            return NPYGenerator()
         elif type == FormatType.JPEG:
             return JPEGGenerator()
         elif type == FormatType.PNG:

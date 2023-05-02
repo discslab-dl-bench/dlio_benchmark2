@@ -5,7 +5,7 @@ IMAGE=${2:-dlio:test}
 LOGGING_DIR=${3:-"/raid/data/dlio/run_output"}
 
 docker run -it --rm --name $CONTAINER_NAME \
-	-v /raid/data/dlio/data:/workspace/dlio/data \
+	-v  /dl-bench/lhovon/dlio/data:/workspace/dlio/data \
 	-v $LOGGING_DIR:/workspace/dlio/hydra_log \
 	-v /raid/data/dlio/run_output:/workspace/dlio/checkpoints \
     $IMAGE /bin/bash

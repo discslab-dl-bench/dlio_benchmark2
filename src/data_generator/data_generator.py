@@ -80,11 +80,14 @@ class DataGenerator(ABC):
 
         if self.num_files_eval > 0:
             self.total_files_to_generate += self.num_files_eval
+
         self._file_list = []
         if self.num_subfolders_train > 1:
             ns = np.ceil(self.num_files_train / self.num_subfolders_train)
             for i in range(self.num_files_train):
                 if self.model == 'unet3d':
+                    file_spec = "{}/train/{}/case_{:05d}.{}".format(self.data_dir, int(i//ns), i, self.format)
+                elif self.model == 'dlrm':
                     file_spec = "{}/train/{}/{}_{}_of_{}.{}".format(self.data_dir, int(i//ns), self.file_prefix, i, self.num_files_train, self.format)
                 else:
                     file_spec = "{}/train/{}/{}_{}_of_{}.{}".format(self.data_dir, int(i//ns), self.file_prefix, i, self.num_files_train, self.format)
@@ -92,7 +95,9 @@ class DataGenerator(ABC):
         else:
             for i in range(self.num_files_train):
                 if self.model == 'unet3d':
-                    file_spec = "{}/train/case_{:05d}".format(self.data_dir, i, self.num_files_train)
+                    file_spec = "{}/train/case_{:05d}.{}".format(self.data_dir, i, self.num_files_train, self.format)
+                elif self.model == 'dlrm':
+                    file_spec = "{}/train/{}_{}_of_{}.{}".format(self.data_dir, self.file_prefix, i, self.num_files_train, self.format)
                 else:
                     file_spec = "{}/train/{}_{}_of_{}.{}".format(self.data_dir, self.file_prefix, i, self.num_files_train, self.format)
                 self._file_list.append(file_spec)
@@ -100,12 +105,19 @@ class DataGenerator(ABC):
         if self.num_subfolders_eval > 1:
             ns = np.ceil(self.num_files_eval / self.num_subfolders_eval)
             for i in range(self.num_files_eval):
-                file_spec = "{}/valid/{}/{}_{}_of_{}.{}".format(self.data_dir, int(i//ns), self.file_prefix, i, self.num_files_eval, self.format)
+                if self.model == 'unet3d':
+                    file_spec = "{}/valid/{}/case_{:05d}_valid.{}".format(self.data_dir, int(i//ns), i, self.format)
+                elif self.model == 'dlrm':
+                    file_spec = "{}/valid/{}/{}_{}_of_{}_valid.{}".format(self.data_dir, int(i//ns), self.file_prefix, i, self.num_files_train, self.format)
+                else:
+                    file_spec = "{}/valid/{}/{}_{}_of_{}_valid.{}".format(self.data_dir, int(i//ns), self.file_prefix, i, self.num_files_eval, self.format)
                 self._file_list.append(file_spec)
         else:
             for i in range(self.num_files_eval):
                 if self.model == 'unet3d':
-                    file_spec = "{}/valid/case_{:05d}".format(self.data_dir, i, self.num_files_train)
+                    file_spec = "{}/valid/case_{:05d}_valid.{}".format(self.data_dir, i, self.num_files_train, self.format)
+                if self.model == 'dlrm':
+                    file_spec = "{}/valid/{}_{}_of_{}_valid.{}".format(self.data_dir, self.file_prefix, i, self.num_files_eval, self.format)
                 else:
-                    file_spec = "{}/valid/{}_{}_of_{}.{}".format(self.data_dir, self.file_prefix, i, self.num_files_eval, self.format)
+                    file_spec = "{}/valid/{}_{}_of_{}_valid.{}".format(self.data_dir, self.file_prefix, i, self.num_files_eval, self.format)
                 self._file_list.append(file_spec)  
