@@ -156,7 +156,8 @@ class DLIOBenchmark(object):
         self.steps_between_checkpoints = self.args.steps_between_checkpoints
         self.epochs_between_checkpoints = self.args.epochs_between_checkpoints
         self.checkpoint_after_epoch = self.args.checkpoint_after_epoch
-        
+        self.checkpoint_after_step = self.args.checkpoint_after_step
+
         # Evaluation support
         self.do_eval = self.args.do_eval
         self.num_files_eval = self.args.num_files_eval
@@ -257,8 +258,12 @@ class DLIOBenchmark(object):
         block = 1   # A continuous period of training steps, ended by checkpointing
         block_step = overall_step = 1   # Steps are taken within blocks
         max_steps = math.floor(self.num_samples * self.num_files_train / self.batch_size / self.comm_size)
-        self.next_eval_step = self.steps_between_evals        
-        self.next_checkpoint_step = self.steps_between_checkpoints         
+        self.next_eval_step = self.steps_between_evals
+
+        if self.checkpoint_after_step > 0:   
+            self.next_checkpoint_step = self.checkpoint_after_step
+        else:
+            self.next_checkpoint_step = self.steps_between_checkpoints
 
         # Start the very first block
         self.stats.start_block(epoch, block)
@@ -313,7 +318,7 @@ class DLIOBenchmark(object):
                 self.stats.start_block(epoch, block)
 
 
-            if self.do_checkpoint and self.steps_between_checkpoints >= 0 and overall_step == self.next_checkpoint_step:
+            if self.do_checkpoint and overall_step == self.next_checkpoint_step:
                 self.stats.end_block(epoch, block, block_step)
                 self.stats.start_ckpt(epoch, block, overall_step)
                 self.framework.checkpoint(epoch, overall_step)
@@ -332,7 +337,7 @@ class DLIOBenchmark(object):
                 if self.args.my_rank==0:
                     logging.info(f"{utcnow()} Maximum number of steps reached")
                 if (block_step!=1 and self.do_checkpoint) or (not self.do_checkpoint):
-                    self.stats.end_block(epoch, block, block_step-1)
+                    self.stats.end_block(epoch, block, block_step)
                 break
                 
             overall_step += 1
@@ -340,7 +345,7 @@ class DLIOBenchmark(object):
 
         end_time = time()
         self.total_compute_time += total_compute_time
-        if self.my_rank == 0 and total_compute_time >0.0:            
+        if self.my_rank == 0 and total_compute_time > 0.0:        
             logging.info(f"{utcnow()} Epoch {epoch} [training] accelerator_under_utilization: {(end_time - start_time - total_compute_time) / total_compute_time}")
         return overall_step
 
@@ -380,7 +385,7 @@ class DLIOBenchmark(object):
                 self.framework.get_reader(DatasetType.TRAIN).finalize()
 
                 # Perform evaluation if enabled
-                if self.do_eval and epoch >= next_eval_epoch:
+                if self.do_eval and epoch == next_eval_epoch:
                     next_eval_epoch += self.epochs_between_evals
 
                     self.stats.start_eval(epoch)
@@ -397,7 +402,6 @@ class DLIOBenchmark(object):
 
                 if self.do_checkpoint and epoch == next_checkpoint_epoch:
                     next_checkpoint_epoch += self.epochs_between_checkpoints
-                    # UNET3D Checkpoints only at the very end
                     self.stats.start_ckpt(epoch, 0, steps)
                     self.framework.checkpoint(epoch, steps)
                     self.stats.end_ckpt(epoch, 0)

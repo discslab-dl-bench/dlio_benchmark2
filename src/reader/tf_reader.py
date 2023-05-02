@@ -31,6 +31,7 @@ class TFReader(FormatReader):
         super().__init__(dataset_type)
         self.read_threads = self._args.read_threads
         self.computation_threads = self._args.computation_threads
+        self.interleave = self._args.interleave
         # We read the full _file_list here instead of _local_file_list
         # because we will shard the data using the tf.data function
 
@@ -74,15 +75,31 @@ class TFReader(FormatReader):
             if self._args.my_rank==0:
                 logging.warning(f"{utcnow()} `read_threads` is set to be 0 for tf.data loader. We change it to tf.data.AUTOTUNE")
             self.read_threads=tf.data.AUTOTUNE
-        if (self.transfer_size !=None):
-            dataset = tf.data.TFRecordDataset(filenames=self._file_list,
-                                            buffer_size=self.transfer_size,
-                                            num_parallel_reads=self.read_threads)
+
+        # if (self.transfer_size !=None):
+        #     dataset = tf.data.TFRecordDataset(filenames=self._file_list,
+        #                                     buffer_size=self.transfer_size,
+        #                                     num_parallel_reads=self.read_threads)
+        # else:
+        #     dataset = tf.data.TFRecordDataset(filenames=self._file_list,
+                                            # num_parallel_reads=self.read_threads)
+
+        dataset = tf.data.Dataset.from_tensor_slices(self._file_list)
+        if len(self._file_list) > 1:
+            dataset = dataset.shard(num_shards=self.comm_size, index=self.my_rank)
+
+        dataset = dataset.shuffle(buffer_size=len(self._file_list))
+
+        if self.interleave:
+            dataset = dataset.interleave(
+                tf.data.TFRecordDataset,
+                cycle_length=8, 
+                num_parallel_calls=8,
+                block_length = 1,
+                deterministic=False
+            )
         else:
-            dataset = tf.data.TFRecordDataset(filenames=self._file_list,
-                                            num_parallel_reads=self.read_threads)            
-        dataset = dataset.shard(num_shards=self.comm_size, index=self.my_rank)
-        dataset = dataset.map(self._tf_parse_function, num_parallel_calls=self.computation_threads)
+            dataset = dataset.apply(tf.data.TFRecordDataset)
 
         if self.sample_shuffle != Shuffle.OFF:
             if self.sample_shuffle == Shuffle.SEED:
@@ -90,9 +107,11 @@ class TFReader(FormatReader):
                                           seed=self.seed)
             else:
                 dataset = dataset.shuffle(buffer_size=self.shuffle_size)
+
+        dataset = dataset.map(self._tf_parse_function, num_parallel_calls=self.computation_threads)
         self._dataset = dataset.batch(self.batch_size, drop_remainder=True)
         
-        if self.prefetch_size>0:
+        if self.prefetch_size > 0:
             self._dataset = dataset.prefetch(buffer_size=self.prefetch_size)
 
     def next(self):

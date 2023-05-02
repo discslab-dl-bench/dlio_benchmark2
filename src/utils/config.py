@@ -65,6 +65,7 @@ class ConfigArguments:
     checkpoint_after_epoch: int = -1 
     epochs_between_checkpoints: int = -1
     steps_between_checkpoints: int = -1
+    checkpoint_after_step: int = -1
     transfer_size: int = None
     read_threads: int = 1
     computation_threads: int = 1
@@ -180,6 +181,8 @@ def LoadConfig(args, config):
             args.keep_files = config['dataset']['keep_files']
         if 'eval_num_samples_per_file' in config['dataset']:
             args.eval_num_samples_per_file = config['dataset']['eval_num_samples_per_file']
+        if 'interleave' in config['dataset']:
+            args.interleave = config['dataset']['interleave']
 
     # data reader
     reader=None
@@ -235,10 +238,12 @@ def LoadConfig(args, config):
             args.eval_after_epoch = config['evaluation']['eval_after_epoch']
         if 'epochs_between_evals' in config['evaluation']:
             args.epochs_between_evals = config['evaluation']['epochs_between_evals']
+        if 'eval_after_step' in config['evaluation']:
+            args.eval_after_epoch = config['evaluation']['eval_after_step']
         if 'steps_between_evals' in config['evaluation']:
             args.steps_between_evals = config['evaluation']['steps_between_evals']
-        if 'total_eval_steps' in config['train']:
-            args.total_eval_steps = config['train']['total_eval_steps']
+        if 'total_eval_steps' in config['evaluation']:
+            args.total_eval_steps = config['evaluation']['total_eval_steps']
 
     if 'checkpoint' in config:
         if 'checkpoint_folder' in config['checkpoint']:
@@ -248,6 +253,8 @@ def LoadConfig(args, config):
             args.checkpoint_after_epoch = config['checkpoint']['checkpoint_after_epoch']
         if 'epochs_between_checkpoints' in config['checkpoint']:
             args.epochs_between_checkpoints = config['checkpoint']['epochs_between_checkpoints']
+        if 'checkpoint_after_step' in config['checkpoint']:
+            args.checkpoint_after_step = config['checkpoint']['checkpoint_after_step']
         if 'steps_between_checkpoints' in config['checkpoint']:
             args.steps_between_checkpoints = config['checkpoint']['steps_between_checkpoints']
         if 'model_size' in config['checkpoint']:

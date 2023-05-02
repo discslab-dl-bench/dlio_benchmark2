@@ -77,23 +77,43 @@ class TFFramework(Framework):
         """
         Performs Checkpointing for a specific step number. It writes different file of different sizes.
         """
-        # if self.rank() == 0:
-        my_rank = self.rank()
-        if not self.storage.get_node(self.checkpoint_folder):
-            self.storage.create_node(self.checkpoint_folder)
+        if self.args.workload == 'bert':
+            total_written = 0
+            i = 0
+            data = "x" * self.args.model_size 
+            with open(self.get_uri(id), "w") as fd:
+                # loop and write out 4k then 8M like real BERT!
+                while total_written < len(data):
+                    remaining = len(data) - total_written
 
-        model_file = os.path.join(self.checkpoint_folder, f"model-{epoch}-{step_number}_{my_rank}.bin")
-        meta_file = os.path.join(self.checkpoint_folder, f"meta-{epoch}-{step_number}_{my_rank}.bin")
-        index_file = os.path.join(self.checkpoint_folder, f"index-{epoch}-{step_number}_{my_rank}.bin")
+                    if i % 2 == 0:
+                        amt_to_write = min(remaining, 4096)
+                    else:
+                        amt_to_write = min(remaining, 8384512)
 
-        string_val = "x" * self.args.model_size 
-        self.storage.put_data(model_file, string_val)
-        # TODO Should these scale with the model size?
-        string_val = "x" * (17371)
-        self.storage.put_data(index_file, string_val)
-        
-        string_val = "x" * (24740228)
-        self.storage.put_data(meta_file, string_val)
+                    buf = data[total_written:total_written + amt_to_write]
+                    total_written += amt_to_write
+
+                    logging.info(f'writing out {amt_to_write} bytes - total {total_written}')
+                    fd.write(buf)
+                    i += 1
+        elif self.rank() == 0:
+            my_rank = self.rank()
+            if not self.storage.get_node(self.checkpoint_folder):
+                self.storage.create_node(self.checkpoint_folder)
+
+            model_file = os.path.join(self.checkpoint_folder, f"model-{epoch}-{step_number}_{my_rank}.bin")
+            meta_file = os.path.join(self.checkpoint_folder, f"meta-{epoch}-{step_number}_{my_rank}.bin")
+            index_file = os.path.join(self.checkpoint_folder, f"index-{epoch}-{step_number}_{my_rank}.bin")
+
+            string_val = "x" * self.args.model_size 
+            self.storage.put_data(model_file, string_val)
+            # TODO Should these scale with the model size?
+            string_val = "x" * (17371)
+            self.storage.put_data(index_file, string_val)
+            
+            string_val = "x" * (24740228)
+            self.storage.put_data(meta_file, string_val)
 
     def compute(self, epoch_number, step, computation_time):
         tf.function(self.model)(epoch_number, step, computation_time)

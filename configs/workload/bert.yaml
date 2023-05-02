@@ -17,15 +17,15 @@ dataset:
   num_files_eval: 1
   num_samples_per_file: 313532
   record_length: 2500
+  interleave: True
 
 train:
-  computation_time: 0.968
-  total_training_steps: 600
+  total_training_steps: 2400
 
 evaluation:
   eval_time: 0.968
-  num_eval_steps: 100
-  epochs_between_evals: 1
+  eval_after_epoch: 1
+  total_eval_steps: 100
  
 reader:
   data_loader: tensorflow
@@ -40,4 +40,6 @@ reader:
 checkpoint:
   checkpoint_folder: checkpoints/bert
   steps_between_checkpoints: 2400
+  checkpoint_after_step: 0
   model_size: 4034713312
+  
