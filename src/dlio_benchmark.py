@@ -133,7 +133,7 @@ class DLIOBenchmark(object):
         
         self.epochs = self.args.epochs
         self.batch_size = self.args.batch_size
-        workload = hydra_cfg.runtime.choices.workload
+        workload = self.args.model
         self.num_gpus = self.args.num_gpus
 
         # Take the compute time values from config or generate them

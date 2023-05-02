@@ -1,9 +1,8 @@
 #!/bin/bash
-WORKLOAD=${1:-bert}
-NUM_GPUS=${2:-8}
-BATCH_SIZE=${3:-6}
+NUM_GPUS=${1:-8}
+BATCH_SIZE=${2:-6}
 
-mpirun -np $NUM_GPUS python3 src/dlio_benchmark.py workload=$WORKLOAD \
+mpirun -np $NUM_GPUS python3 src/dlio_benchmark.py workload=bert \
     ++workload.reader.batch_size=$BATCH_SIZE \
     ++workload.num_gpus=$NUM_GPUS \
     ++workload.train.total_training_steps=20 \

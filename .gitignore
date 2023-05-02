@@ -1,6 +1,7 @@
 # Benchmark generated data
 data/
 output/
+logs/
 checkpoints/
 notes/
 stuff/

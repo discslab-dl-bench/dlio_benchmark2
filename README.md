@@ -2,7 +2,6 @@
 
 
 
-![test status](https://github.com/argonne-lcf/dlio_benchmark/actions/workflows/python-package-conda.yml/badge.svg)
 
 This README provides an abbreviated documentation of the DLIO code. Please refer to https://argonne-lcf.github.io/dlio_benchmark/ for full user documentation. 
 

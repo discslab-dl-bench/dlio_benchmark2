@@ -95,7 +95,7 @@ class DataGenerator(ABC):
         else:
             for i in range(self.num_files_train):
                 if self.model == 'unet3d':
-                    file_spec = "{}/train/case_{:05d}.{}".format(self.data_dir, i, self.num_files_train, self.format)
+                    file_spec = "{}/train/case_{:05d}.{}".format(self.data_dir, i, self.format)
                 elif self.model == 'dlrm':
                     file_spec = "{}/train/{}_{}_of_{}.{}".format(self.data_dir, self.file_prefix, i, self.num_files_train, self.format)
                 else:
@@ -115,7 +115,7 @@ class DataGenerator(ABC):
         else:
             for i in range(self.num_files_eval):
                 if self.model == 'unet3d':
-                    file_spec = "{}/valid/case_{:05d}_valid.{}".format(self.data_dir, i, self.num_files_train, self.format)
+                    file_spec = "{}/valid/case_{:05d}_valid.{}".format(self.data_dir, i, self.format)
                 if self.model == 'dlrm':
                     file_spec = "{}/valid/{}_{}_of_{}_valid.{}".format(self.data_dir, self.file_prefix, i, self.num_files_eval, self.format)
                 else:

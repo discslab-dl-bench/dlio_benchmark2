@@ -1,9 +1,8 @@
 #!/bin/bash
-WORKLOAD=${1:-unet3d}
-NUM_GPUS=${2:-8}
-BATCH_SIZE=${3:-4}
+NUM_GPUS=${1:-8}
+BATCH_SIZE=${2:-4}
 
-mpirun -np $NUM_GPUS python3 src/dlio_benchmark.py workload=$WORKLOAD \
+mpirun -np $NUM_GPUS python3 src/dlio_benchmark.py workload=unet3d \
     ++workload.reader.batch_size=$BATCH_SIZE \
     ++workload.num_gpus=$NUM_GPUS \
     ++workload.train.epochs=5 \
