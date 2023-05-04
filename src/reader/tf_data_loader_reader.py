@@ -16,7 +16,7 @@
 """
 import math
 import logging
-from time import perf_counter_ns, time
+from time import time
 
 from src.utils.utility import utcnow, timeit
 from src.common.enumerations import Shuffle, FormatType
@@ -134,12 +134,8 @@ class TFDataLoaderReader(FormatReader):
             total = math.floor(self.num_samples*len(self._file_list)/self.batch_size/self.comm_size)
             logging.debug(f"{utcnow()} Rank {self.my_rank} should read {total} batches")
 
-        t0 = perf_counter_ns()
         for batch in self._dataset:
-            if self.my_rank == 0:
-                logging.info(f"load_batch_inner {perf_counter_ns() - t0}")
             yield batch
-            t0 = perf_counter_ns()
 
     def finalize(self):
         pass

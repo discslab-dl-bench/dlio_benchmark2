@@ -19,7 +19,7 @@ import math
 import hydra
 import logging
 import numpy as np
-from time import time, perf_counter_ns
+from time import time
 from numpy import random
 
 # Reduce TF and CUDA logging
@@ -275,12 +275,7 @@ class DLIOBenchmark(object):
         total_compute_time = 0.0
         start_time = time()
 
-        t_iter = t0 = perf_counter_ns()
         for batch in reader.next():
-
-            if self.my_rank == 0:
-                logging.info(f"load_batch_mem {perf_counter_ns() - t0}")
-                t0 = perf_counter_ns()
 
             self.framework.barrier()
             # Log a new block, unless it's the first one which we've already logged before the loop
@@ -296,10 +291,6 @@ class DLIOBenchmark(object):
                 total_compute_time += computation_time
                 self.framework.compute(epoch, block_step, computation_time)
             self.framework.barrier()
-
-            if self.my_rank == 0:
-                logging.info(f"all_compute {perf_counter_ns() - t0}")
-                logging.info(f"step_end {perf_counter_ns() - t_iter}")
 
             # Perform evaluation during epochs if required
             # Assume that evaluation happens on all GPU
@@ -344,7 +335,6 @@ class DLIOBenchmark(object):
                 break
                 
             overall_step += 1
-            t_iter = t0 = perf_counter_ns()
 
         end_time = time()
         self.total_compute_time += total_compute_time

@@ -1,6 +1,5 @@
 import math
 import logging
-from time import perf_counter_ns
 import numpy as np
 
 from src.utils.utility import utcnow
@@ -57,22 +56,16 @@ class TeraBinLoaderReader(FormatReader):
             return self.num_entries
         
         def __getitem__(self, idx):
-            t0 = perf_counter_ns()
             self.file.seek(idx * self.bytes_per_entry, 0)
             raw_data = self.file.read(self.bytes_per_entry)
             array = np.frombuffer(raw_data, dtype=np.int32)
-            if comm.rank == 0:
-                logging.info(f'batch_load {perf_counter_ns() - t0}')
 
-            t0 = perf_counter_ns()
             tensor = torch.from_numpy(array).view((-1, self.tot_fea))
             tensor = _transform_features(x_int_batch=tensor[:, 1:14],
                                     x_cat_batch=tensor[:, 14:],
                                     y_batch=tensor[:, 0],
                                     max_ind_range=self.max_ind_range,
                                     flag_input_torch_tensor=True)
-            if comm.rank == 0:
-                logging.info(f'batch_preproc {perf_counter_ns() - t0}')
             return tensor
 
         def __del__(self):
@@ -129,12 +122,8 @@ class TeraBinLoaderReader(FormatReader):
         # dataset = self._dataset
         logging.debug(f"{utcnow()} Rank {self.my_rank} should read {len(self._dataset)} batches")
 
-        t0 = perf_counter_ns()
         for batch in self._dataset:
-            if self.my_rank == 0:
-                logging.info(f"load_batch_inner {perf_counter_ns() - t0}")
             yield batch
-            t0 = perf_counter_ns()
 
     def finalize(self):
         pass

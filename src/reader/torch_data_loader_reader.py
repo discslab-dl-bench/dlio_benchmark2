@@ -17,7 +17,7 @@
 import math
 import logging
 import numpy as np
-from time import perf_counter_ns, time, sleep
+from time import time, sleep
 import os
 from numpy import random
 
@@ -46,19 +46,12 @@ def read_png(filename):
     return totensor(Image.open(filename).resize((224, 224)))
 
 def read_npy(filename):
-    t0 = perf_counter_ns()
     x = np.load(f'{filename}_x.npy')
     y = np.load(f'{filename}_y.npy')
-    if comm.rank == 0:
-        logging.info(f"sample_load {perf_counter_ns() - t0}")
     
-    t0 = perf_counter_ns()
     x = np.resize(x, (224, 224))
     y = np.resize(y, (224, 224))
 
-    if comm.rank == 0:
-        logging.info(f"sample_preproc {perf_counter_ns() - t0}")
-        
     return x, y
 
 def read_npz(filename):
@@ -161,12 +154,8 @@ class TorchDataLoaderReader(FormatReader):
         super().next()
         logging.debug(f"{utcnow()} Rank {self.my_rank} should read {len(self._dataset)} batches")
 
-        t0 = perf_counter_ns()
         for batch in self._dataset:
-            if self.my_rank == 0:
-                logging.info(f"load_batch_inner {perf_counter_ns() - t0}")
             yield batch
-            t0 = perf_counter_ns()
 
     def finalize(self):
         pass
