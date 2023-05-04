@@ -273,8 +273,8 @@ class DLIOBenchmark(object):
         reader = self.framework.get_reader(dataset_type=DatasetType.TRAIN)
 
         total_compute_time = 0.0
-        start_time = time()
 
+        t0 = start_time = time()
         for batch in reader.next():
 
             self.framework.barrier()
@@ -291,6 +291,8 @@ class DLIOBenchmark(object):
                 total_compute_time += computation_time
                 self.framework.compute(epoch, block_step, computation_time)
             self.framework.barrier()
+
+            self.stats.batch_processed(epoch, overall_step, block, t0)
 
             # Perform evaluation during epochs if required
             # Assume that evaluation happens on all GPU
@@ -335,6 +337,7 @@ class DLIOBenchmark(object):
                 break
                 
             overall_step += 1
+            t0 = time()
 
         end_time = time()
         self.total_compute_time += total_compute_time
