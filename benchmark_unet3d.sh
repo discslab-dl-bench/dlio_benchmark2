@@ -16,7 +16,8 @@ IMAGE=${4:-dlio:latest}
 # Get any extra arguments and pass them to the launch script
 # The first 2 are number of GPUs and batch size for all workloads 
 ARGS=("$@")
-PASS=("${ARGS[@]:5}")
+PASS=("${ARGS[@]:4}")
+echo "${PASS[@]}"
 
 docker run -it --rm --name $CONTAINER_NAME \
 	-v $DATA_DIR:/workspace/dlio/data \
