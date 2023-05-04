@@ -162,6 +162,9 @@ class DLIOBenchmark(object):
         self.do_eval = self.args.do_eval
         self.num_files_eval = self.args.num_files_eval
 
+        logging.info(f'do checkpoint? {self.do_checkpoint}')
+        logging.info(f'do eval? {self.do_eval}')
+
         self.batch_size_eval = self.args.batch_size_eval
         self.eval_time = self.args.eval_time
         self.eval_time_stdev = self.args.eval_time_stdev        
@@ -454,6 +457,5 @@ def main(cfg : DictConfig) -> None:
     benchmark.finalize()
 
 if __name__ == '__main__':
-    OmegaConf.register_new_resolver("eval", eval)
     main()
     exit(0)

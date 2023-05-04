@@ -276,9 +276,9 @@ def LoadConfig(args, config):
         if 'debug' in config['workflow']:
             args.debug = config['workflow']['debug']
         if 'evaluation' in config['workflow']:
-            args.do_eval= config['workflow']['evaluation']
+            args.do_eval = config['workflow']['evaluation']
         if 'checkpoint' in config['workflow']:
-            args.do_checkpoint= config['workflow']['checkpoint']
+            args.do_checkpoint = config['workflow']['checkpoint']
         if 'profiling' in config['workflow']: 
             args.do_profiling = config['workflow']['profiling']
 
