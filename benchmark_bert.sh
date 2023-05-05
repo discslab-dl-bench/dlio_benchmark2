@@ -5,9 +5,6 @@ SCRIPT_DIR=$(dirname -- "$( readlink -f -- "$0"; )")
 DATA_DIR="$SCRIPT_DIR/data"
 OUTPUT_DIR="$SCRIPT_DIR/output"
 
-DATA_DIR="/raid/data/dlio/data"
-OUTPUT_DIR="/raid/data/dlio/run_output"
-
 NUM_GPUS=${1:-8}
 CONTAINER_NAME=${2:-dlio}
 LOGGING_DIR=${3:-"$SCRIPT_DIR/logs"}
